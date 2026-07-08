@@ -1,3 +1,4 @@
+from .asset_materializer import materialize_input_assets
 from .cli_runner import run_cli_command
 from .context_builder import build_context_payload
 from .contracts import load_manifest, load_profile, validate_result_payload
@@ -13,6 +14,7 @@ __all__ = [
     "execute_text_session",
     "load_manifest",
     "load_profile",
+    "materialize_input_assets",
     "prepare_workspace",
     "render_context_template",
     "resolve_skill_directory",
