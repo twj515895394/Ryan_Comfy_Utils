@@ -38,6 +38,24 @@ Ryan Comfy Utils 是一个自用型 ComfyUI 工具节点集合，重点面向：
 - `session_dir`
 - `raw_result_json`
 
+### Ryan Image Prompt Agent
+
+分类：`Ryan Utils / ACP`
+
+固定绑定 `image_prompt_generator`，用于创作任意风格/题材/场景的**图像生成提示词**（非图像分析）。
+
+输入：`user_text`；可选 `image_paths`（多行参考图路径）、`style` / `subject` / `scene` / `extra_prompt`；`skill_root` 留空时使用包内默认 Skill。
+
+输出：`response_text`、`session_dir`、`raw_result_json`。契约详见 `docs/agents/acp-fixed-prompt-agent-contracts.md`。
+
+### Ryan Video Prompt Agent
+
+分类：`Ryan Utils / ACP`
+
+固定绑定 `video_prompt_generator`，用于创作**视频生成提示词**；`image_paths` 可选，支持纯文本驱动。可与 `Ryan Batch Video Loader`、`Ryan Video Frame Sampler` 输出的帧路径串联。
+
+输出与 Universal Agent 相同的三项文本字段。
+
 ### Ryan LLM Chat
 
 分类：`Ryan Utils / LLM`
