@@ -1,5 +1,7 @@
-import os
+import json
+import re
 import subprocess
+from datetime import datetime
 from pathlib import Path
 from typing import List, Tuple
 
@@ -7,6 +9,10 @@ import cv2
 import numpy as np
 import torch
 from PIL import Image
+
+
+def natural_sort_key(text: str):
+    return [int(part) if part.isdigit() else part.lower() for part in re.split(r"(\d+)", text)]
 
 
 def scan_video_files(video_dir: str, extensions: str, recursive: bool = False) -> List[Path]:
@@ -26,6 +32,8 @@ def sort_video_files(files: List[Path], sort_mode: str = "filename_asc") -> List
 
     if mode.startswith("mtime"):
         return sorted(files, key=lambda p: p.stat().st_mtime, reverse=reverse)
+    if mode.startswith("natural"):
+        return sorted(files, key=lambda p: natural_sort_key(p.name), reverse=reverse)
     return sorted(files, key=lambda p: p.name.lower(), reverse=reverse)
 
 
@@ -33,6 +41,41 @@ def clamp_index(index: int, total: int) -> int:
     if total <= 0:
         return 0
     return max(0, min(int(index or 0), total - 1))
+
+
+def get_video_info(video_path: str) -> dict:
+    cap = cv2.VideoCapture(video_path)
+    if not cap.isOpened():
+        raise RuntimeError(f"OpenCV failed to inspect video: {video_path}")
+
+    fps = float(cap.get(cv2.CAP_PROP_FPS) or 0)
+    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH) or 0)
+    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT) or 0)
+    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
+    duration_seconds = float(total_frames / fps) if fps > 0 and total_frames > 0 else 0.0
+    cap.release()
+
+    path = Path(video_path)
+    size_bytes = path.stat().st_size if path.exists() else 0
+    return {
+        "video_path": str(path),
+        "filename": path.name,
+        "extension": path.suffix.lower().lstrip("."),
+        "width": width,
+        "height": height,
+        "fps": fps,
+        "total_frames": total_frames,
+        "duration_seconds": duration_seconds,
+        "size_bytes": size_bytes,
+        "modified_time": datetime.fromtimestamp(path.stat().st_mtime).isoformat() if path.exists() else None,
+    }
+
+
+def video_info_to_json(video_path: str, extra: dict | None = None) -> str:
+    info = get_video_info(video_path)
+    if extra:
+        info.update(extra)
+    return json.dumps(info, ensure_ascii=False, indent=2, default=str)
 
 
 def _resize_frame(frame: np.ndarray, custom_width: int, custom_height: int) -> np.ndarray:
@@ -139,7 +182,24 @@ def load_video_frames(video_path: str, backend_mode: str = "auto", **kwargs) -> 
         return load_video_frames_ffmpeg(video_path, **kwargs)
 
 
-def sample_image_batch(images: torch.Tensor, sample_mode: str, frame_count: int, frame_interval: int = 1):
+def parse_custom_indexes(custom_indexes: str, total: int, limit: int = 10) -> List[int]:
+    if not custom_indexes or not custom_indexes.strip():
+        return []
+
+    indexes = []
+    for raw in re.split(r"[,，\s]+", custom_indexes.strip()):
+        if not raw:
+            continue
+        idx = int(raw)
+        if idx < 0:
+            idx = total + idx
+        idx = max(0, min(idx, total - 1))
+        indexes.append(idx)
+
+    return list(dict.fromkeys(indexes))[:limit]
+
+
+def sample_image_batch(images: torch.Tensor, sample_mode: str, frame_count: int, frame_interval: int = 1, custom_indexes: str = ""):
     if images is None or not isinstance(images, torch.Tensor):
         raise ValueError("images input is required")
     if images.ndim == 3:
@@ -151,7 +211,11 @@ def sample_image_batch(images: torch.Tensor, sample_mode: str, frame_count: int,
     count = max(1, min(int(frame_count or 2), 10))
     mode = sample_mode or "head_tail"
 
-    if mode == "head_tail":
+    if mode == "custom_indexes":
+        indexes = parse_custom_indexes(custom_indexes, total, 10)
+        if not indexes:
+            raise ValueError("sample_mode=custom_indexes requires custom_indexes, e.g. 0,10,20,-1")
+    elif mode == "head_tail":
         indexes = [0] if total == 1 or count == 1 else [0, total - 1]
         if count > 2 and total > 2:
             middle_count = count - 2
@@ -163,19 +227,21 @@ def sample_image_batch(images: torch.Tensor, sample_mode: str, frame_count: int,
     else:
         indexes = np.linspace(0, total - 1, count).round().astype(int).tolist()
 
-    indexes = sorted(dict.fromkeys(max(0, min(i, total - 1)) for i in indexes))[:10]
+    indexes = list(dict.fromkeys(max(0, min(i, total - 1)) for i in indexes))[:10]
     return images[indexes], indexes
 
 
-def save_image_batch(images: torch.Tensor, output_dir: str, subdir: str, filename_prefix: str) -> int:
+def save_image_batch(images: torch.Tensor, output_dir: str, subdir: str, filename_prefix: str) -> List[str]:
     folder = Path(output_dir) / (subdir or "ryan_video_frames")
     folder.mkdir(parents=True, exist_ok=True)
     prefix = filename_prefix or "video_frame"
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
 
-    saved = 0
+    saved_paths = []
     for i, img in enumerate(images):
         arr = img.detach().cpu().numpy()
         arr = np.clip(arr * 255.0, 0, 255).astype(np.uint8)
-        Image.fromarray(arr).save(folder / f"{prefix}_{i:03d}.png")
-        saved += 1
-    return saved
+        path = folder / f"{prefix}_{timestamp}_{i:03d}.png"
+        Image.fromarray(arr).save(path)
+        saved_paths.append(str(path))
+    return saved_paths
