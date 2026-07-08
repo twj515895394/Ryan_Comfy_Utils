@@ -56,6 +56,14 @@ Ryan Comfy Utils 是一个自用型 ComfyUI 工具节点集合，重点面向：
 
 输出与 Universal Agent 相同的三项文本字段。
 
+### Ryan Image Analyze Agent
+
+分类：`Ryan Utils / ACP`
+
+固定绑定 `image_prompt_reverse`，从参考图**反推**可用于 AI 绘图的提示词（默认中英双语）。`category` 选择反推模板类型；**必须**提供 `image_paths`。
+
+`export_to_file` 开关（默认关）：开启后将 prompt 写入 `output/ryan_acp_exports/image_analyze/`。与 Image Prompt 节点分工见 `docs/agents/acp-fixed-prompt-agent-contracts.md`。
+
 ### Ryan LLM Chat
 
 分类：`Ryan Utils / LLM`

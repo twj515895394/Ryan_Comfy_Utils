@@ -2,6 +2,7 @@ import json
 from pathlib import Path
 
 from ..acp.contracts import load_manifest, load_profile
+from ..acp.file_exporter import NODE_SLUG_IMAGE_ANALYZE, export_prompt_to_file
 from ..acp.runtime import execute_text_session, map_result_fields
 from ..acp.skill_loader import resolve_skill_root
 
@@ -15,6 +16,20 @@ DEFAULT_IMAGE_PROMPT_MANIFEST_PATH = (
 DEFAULT_VIDEO_PROMPT_MANIFEST_PATH = (
     PACKAGE_ROOT / "acp" / "fixtures" / "manifests" / "video_prompt_agent.json"
 )
+DEFAULT_IMAGE_ANALYZE_MANIFEST_PATH = (
+    PACKAGE_ROOT / "acp" / "fixtures" / "manifests" / "image_analyze_agent.json"
+)
+
+IMAGE_REVERSE_CATEGORIES = (
+    "general",
+    "typography_logo",
+    "landscape",
+    "photography",
+    "illustration",
+    "render_3d",
+    "ip_character",
+)
+OUTPUT_LANGUAGE_OPTIONS = ("bilingual", "zh", "en")
 
 
 def _resolve_path(path_text: str) -> Path:
@@ -234,3 +249,76 @@ class RyanACPVideoPromptAgent:
             image_paths=image_paths,
             extra_user_lines=extra,
         )
+
+
+class RyanACPImageAnalyzeAgent:
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image_paths": ("STRING", {"default": "", "multiline": True}),
+                "user_text": ("STRING", {"default": "", "multiline": True}),
+                "category": (list(IMAGE_REVERSE_CATEGORIES), {"default": "general"}),
+                "output_language": (list(OUTPUT_LANGUAGE_OPTIONS), {"default": "bilingual"}),
+                "profile_path": ("STRING", {"default": str(DEFAULT_PROFILE_PATH)}),
+                "workspace_root": ("STRING", {"default": "output/acp_workspace"}),
+                "session_id": ("STRING", {"default": "session_image_analyze"}),
+                "export_to_file": ("BOOLEAN", {"default": False}),
+            },
+            "optional": {
+                "extra_prompt": ("STRING", {"default": "", "multiline": True}),
+                "export_filename": ("STRING", {"default": ""}),
+                "skill_root": ("STRING", {"default": ""}),
+                "manifest_path": ("STRING", {"default": str(DEFAULT_IMAGE_ANALYZE_MANIFEST_PATH)}),
+            },
+        }
+
+    RETURN_TYPES = ("STRING", "STRING", "STRING")
+    RETURN_NAMES = ("response_text", "session_dir", "raw_result_json")
+    FUNCTION = "run"
+    CATEGORY = "Ryan Utils / ACP"
+
+    def run(
+        self,
+        image_paths,
+        user_text,
+        category,
+        output_language,
+        profile_path,
+        workspace_root,
+        session_id,
+        export_to_file,
+        extra_prompt="",
+        export_filename="",
+        skill_root="",
+        manifest_path=str(DEFAULT_IMAGE_ANALYZE_MANIFEST_PATH),
+    ):
+        if not parse_multiline_paths(image_paths):
+            raise ValueError(
+                "Ryan Image Analyze Agent requires at least one local image path in image_paths"
+            )
+        extra = _format_optional_fields(
+            category=category,
+            output_language=output_language,
+            extra_prompt=extra_prompt,
+        )
+        response_text, session_dir, raw_json = run_fixed_acp_agent(
+            manifest_path=manifest_path,
+            profile_path=profile_path,
+            workspace_root=workspace_root,
+            session_id=session_id,
+            skill_root=skill_root,
+            user_text=user_text,
+            image_paths=image_paths,
+            extra_user_lines=extra,
+        )
+        if export_to_file:
+            export_prompt_to_file(
+                response_text=response_text,
+                node_name="Ryan Image Analyze Agent",
+                node_slug=NODE_SLUG_IMAGE_ANALYZE,
+                session_id=session_id,
+                export_filename=export_filename,
+                category=category,
+            )
+        return response_text, session_dir, raw_json
