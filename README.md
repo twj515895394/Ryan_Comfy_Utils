@@ -22,6 +22,12 @@ Ryan Comfy Utils 是一个自用型 ComfyUI 工具节点集合，重点面向：
 - `request_json`
 - `raw_response_json`
 
+说明：
+
+- 不做流式输出，使用 blocking 请求。
+- 请求失败直接抛异常并中断 workflow。
+- `request_json` 用于调试；如果包含 Vision 图片，base64 data URL 会被截断，避免 ComfyUI 输出过大。
+
 ### Ryan LLM Vision Chat
 
 分类：`Ryan Utils / LLM`
@@ -34,6 +40,7 @@ Ryan Comfy Utils 是一个自用型 ComfyUI 工具节点集合，重点面向：
 - 只等比缩小，不放大
 - 默认 `jpeg`，`jpeg_quality = 85`
 - 可切换 `png`
+- `request_json` 中的 base64 图片会被截断展示，真实请求仍发送完整图片
 
 ### Ryan Prompt Template
 
@@ -57,6 +64,15 @@ Ryan Comfy Utils 是一个自用型 ComfyUI 工具节点集合，重点面向：
 - `select_every_nth`
 - `backend_mode = auto / opencv / ffmpeg`
 
+排序模式：
+
+- `filename_asc`
+- `filename_desc`
+- `natural_asc`
+- `natural_desc`
+- `mtime_asc`
+- `mtime_desc`
+
 输出：
 
 - `images`
@@ -66,14 +82,48 @@ Ryan Comfy Utils 是一个自用型 ComfyUI 工具节点集合，重点面向：
 - `index`
 - `total`
 - `file_list_text`
+- `video_info_json`
+
+`video_info_json` 包含：
+
+- `width`
+- `height`
+- `fps`
+- `total_frames`
+- `duration_seconds`
+- `size_bytes`
+- `decoded_frame_count`
+- 当前加载参数
 
 ### Ryan Video Frame Sampler
 
 分类：`Ryan Utils / Video`
 
-从 `images` 视频帧批次中抽取首尾帧、均匀采样帧或间隔帧，默认输出首尾 2 帧，最大 10 张。
+从 `images` 视频帧批次中抽取首尾帧、均匀采样帧、间隔帧或自定义索引帧，默认输出首尾 2 帧，最大 10 张。
 
-支持预览输出，也可保存到 ComfyUI 默认 output 目录下的子目录。
+采样模式：
+
+- `head_tail`
+- `uniform`
+- `interval`
+- `custom_indexes`
+
+`custom_indexes` 示例：
+
+```text
+0,10,20,-1
+```
+
+其中 `-1` 表示最后一帧。
+
+支持预览输出，也可保存到 ComfyUI 默认 output 目录下的子目录。保存文件会自动加时间戳，避免重复执行时覆盖旧文件。
+
+输出：
+
+- `images`
+- `frame_indexes`
+- `frame_count`
+- `saved_paths_text`
 
 ## 安装
 
