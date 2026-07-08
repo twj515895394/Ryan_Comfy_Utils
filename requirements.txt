@@ -1,0 +1,5 @@
+numpy
+pillow
+torch
+opencv-python
+openai>=1.0.0
