@@ -1,6 +1,3 @@
-import os
-from pathlib import Path
-
 import folder_paths
 
 from ..core.video_utils import (
@@ -10,6 +7,7 @@ from ..core.video_utils import (
     save_image_batch,
     scan_video_files,
     sort_video_files,
+    video_info_to_json,
 )
 
 
@@ -23,7 +21,7 @@ class RyanBatchVideoLoader:
                 "index": ("INT", {"default": 0, "min": 0, "max": 999999, "step": 1}),
                 "recursive": ("BOOLEAN", {"default": False}),
                 "extensions": ("STRING", {"default": "mp4,mov,mkv,webm,avi"}),
-                "sort_mode": (["filename_asc", "filename_desc", "mtime_asc", "mtime_desc"], {"default": "filename_asc"}),
+                "sort_mode": (["filename_asc", "filename_desc", "natural_asc", "natural_desc", "mtime_asc", "mtime_desc"], {"default": "filename_asc"}),
                 "backend_mode": (["auto", "opencv", "ffmpeg"], {"default": "auto"}),
                 "force_rate": ("FLOAT", {"default": 0, "min": 0, "max": 120, "step": 1}),
                 "custom_width": ("INT", {"default": 0, "min": 0, "max": 8192, "step": 8}),
@@ -34,8 +32,8 @@ class RyanBatchVideoLoader:
             }
         }
 
-    RETURN_TYPES = ("IMAGE", "INT", "STRING", "STRING", "INT", "INT", "STRING")
-    RETURN_NAMES = ("images", "frame_count", "video_path", "filename", "index", "total", "file_list_text")
+    RETURN_TYPES = ("IMAGE", "INT", "STRING", "STRING", "INT", "INT", "STRING", "STRING")
+    RETURN_NAMES = ("images", "frame_count", "video_path", "filename", "index", "total", "file_list_text", "video_info_json")
     FUNCTION = "load"
     CATEGORY = "Ryan Utils / Video"
 
@@ -59,7 +57,22 @@ class RyanBatchVideoLoader:
             select_every_nth=select_every_nth,
         )
         file_list_text = "\n".join(f"{i}: {p.name}" for i, p in enumerate(files))
-        return (images, frame_count, str(selected), selected.name, actual_index, total, file_list_text)
+        video_info_json = video_info_to_json(
+            str(selected),
+            extra={
+                "selected_index": actual_index,
+                "total_files": total,
+                "decoded_frame_count": frame_count,
+                "backend_mode": backend_mode,
+                "force_rate": force_rate,
+                "custom_width": custom_width,
+                "custom_height": custom_height,
+                "frame_load_cap": frame_load_cap,
+                "skip_first_frames": skip_first_frames,
+                "select_every_nth": select_every_nth,
+            },
+        )
+        return (images, frame_count, str(selected), selected.name, actual_index, total, file_list_text, video_info_json)
 
     @classmethod
     def IS_CHANGED(cls, video_dir, index, recursive, extensions, sort_mode, backend_mode, force_rate, custom_width, custom_height, frame_load_cap, skip_first_frames, select_every_nth):
@@ -69,7 +82,7 @@ class RyanBatchVideoLoader:
             return f"empty:{video_dir}"
         actual_index = clamp_index(index, total)
         selected = files[actual_index]
-        return f"{selected}:{selected.stat().st_mtime}:{index}:{force_rate}:{custom_width}:{custom_height}:{frame_load_cap}:{skip_first_frames}:{select_every_nth}:{backend_mode}"
+        return f"{selected}:{selected.stat().st_mtime}:{index}:{sort_mode}:{force_rate}:{custom_width}:{custom_height}:{frame_load_cap}:{skip_first_frames}:{select_every_nth}:{backend_mode}"
 
 
 class RyanVideoFrameSampler:
@@ -77,9 +90,10 @@ class RyanVideoFrameSampler:
     def INPUT_TYPES(cls):
         return {
             "required": {
-                "sample_mode": (["head_tail", "uniform", "interval"], {"default": "head_tail"}),
+                "sample_mode": (["head_tail", "uniform", "interval", "custom_indexes"], {"default": "head_tail"}),
                 "frame_count": ("INT", {"default": 2, "min": 1, "max": 10, "step": 1}),
                 "frame_interval": ("INT", {"default": 1, "min": 1, "max": 100000, "step": 1}),
+                "custom_indexes": ("STRING", {"default": "0,-1"}),
                 "save_mode": (["preview_only", "save_to_output"], {"default": "preview_only"}),
                 "output_subdir": ("STRING", {"default": "ryan_video_frames"}),
                 "filename_prefix": ("STRING", {"default": "video_frame"}),
@@ -89,14 +103,15 @@ class RyanVideoFrameSampler:
             }
         }
 
-    RETURN_TYPES = ("IMAGE", "STRING", "INT")
-    RETURN_NAMES = ("images", "frame_indexes", "frame_count")
+    RETURN_TYPES = ("IMAGE", "STRING", "INT", "STRING")
+    RETURN_NAMES = ("images", "frame_indexes", "frame_count", "saved_paths_text")
     FUNCTION = "sample"
     CATEGORY = "Ryan Utils / Video"
 
-    def sample(self, sample_mode, frame_count, frame_interval, save_mode, output_subdir, filename_prefix, images=None):
-        sampled, indexes = sample_image_batch(images, sample_mode, frame_count, frame_interval)
+    def sample(self, sample_mode, frame_count, frame_interval, custom_indexes, save_mode, output_subdir, filename_prefix, images=None):
+        sampled, indexes = sample_image_batch(images, sample_mode, frame_count, frame_interval, custom_indexes)
+        saved_paths = []
         if save_mode == "save_to_output":
             output_dir = folder_paths.get_output_directory()
-            save_image_batch(sampled, output_dir, output_subdir, filename_prefix)
-        return (sampled, ",".join(str(i) for i in indexes), sampled.shape[0])
+            saved_paths = save_image_batch(sampled, output_dir, output_subdir, filename_prefix)
+        return (sampled, ",".join(str(i) for i in indexes), sampled.shape[0], "\n".join(saved_paths))
