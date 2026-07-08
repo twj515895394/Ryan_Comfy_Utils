@@ -13,6 +13,7 @@ class TestACPImagePromptNode(unittest.TestCase):
         self.assertEqual(node.RETURN_NAMES, ("response_text", "session_dir", "raw_result_json"))
         required = RyanACPImagePromptAgent.INPUT_TYPES()["required"]
         self.assertIn("user_text", required)
+        self.assertIn("export_to_file", required)
         optional = RyanACPImagePromptAgent.INPUT_TYPES()["optional"]
         self.assertIn("image_paths", optional)
         self.assertIn("style", optional)
@@ -26,6 +27,7 @@ class TestACPImagePromptNode(unittest.TestCase):
             profile_path="p",
             workspace_root="/tmp/w",
             session_id="s1",
+            export_to_file=False,
             image_paths="/a.png",
             style="cyberpunk",
             subject="",
@@ -39,6 +41,20 @@ class TestACPImagePromptNode(unittest.TestCase):
         kwargs = run_fixed.call_args.kwargs
         self.assertIn("cyberpunk", kwargs["extra_user_lines"])
         self.assertEqual(kwargs["image_paths"], "/a.png")
+
+    @patch("ryan_comfy_utils.nodes.acp_nodes._maybe_export_prompt")
+    @patch("ryan_comfy_utils.nodes.acp_nodes.run_fixed_acp_agent")
+    def test_run_exports_when_toggle_on(self, run_fixed, maybe_export):
+        run_fixed.return_value = ("p", "/tmp/s", "{}")
+        node = RyanACPImagePromptAgent()
+        node.run(
+            user_text="x",
+            profile_path="p",
+            workspace_root="/tmp/w",
+            session_id="s1",
+            export_to_file=True,
+        )
+        maybe_export.assert_called_once()
 
 
 if __name__ == "__main__":

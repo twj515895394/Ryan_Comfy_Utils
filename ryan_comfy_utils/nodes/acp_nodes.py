@@ -2,7 +2,12 @@ import json
 from pathlib import Path
 
 from ..acp.contracts import load_manifest, load_profile
-from ..acp.file_exporter import NODE_SLUG_IMAGE_ANALYZE, export_prompt_to_file
+from ..acp.file_exporter import (
+    NODE_SLUG_IMAGE_ANALYZE,
+    NODE_SLUG_IMAGE_PROMPT,
+    NODE_SLUG_VIDEO_PROMPT,
+    export_prompt_to_file,
+)
 from ..acp.runtime import execute_text_session, map_result_fields
 from ..acp.skill_loader import resolve_skill_root
 
@@ -61,6 +66,28 @@ def _serialize_raw_result(mapped: dict) -> str:
     if isinstance(raw_result_value, dict):
         return json.dumps(raw_result_value, ensure_ascii=False)
     return str(raw_result_value)
+
+
+def _maybe_export_prompt(
+    *,
+    export_to_file: bool,
+    response_text: str,
+    node_name: str,
+    node_slug: str,
+    session_id: str,
+    export_filename: str = "",
+    category: str = "",
+) -> None:
+    if not export_to_file:
+        return
+    export_prompt_to_file(
+        response_text=response_text,
+        node_name=node_name,
+        node_slug=node_slug,
+        session_id=session_id,
+        export_filename=export_filename,
+        category=category,
+    )
 
 
 def run_fixed_acp_agent(
@@ -153,6 +180,7 @@ class RyanACPImagePromptAgent:
                 "profile_path": ("STRING", {"default": str(DEFAULT_PROFILE_PATH)}),
                 "workspace_root": ("STRING", {"default": "output/acp_workspace"}),
                 "session_id": ("STRING", {"default": "session_image_prompt"}),
+                "export_to_file": ("BOOLEAN", {"default": False}),
             },
             "optional": {
                 "image_paths": ("STRING", {"default": "", "multiline": True}),
@@ -160,6 +188,7 @@ class RyanACPImagePromptAgent:
                 "subject": ("STRING", {"default": ""}),
                 "scene": ("STRING", {"default": ""}),
                 "extra_prompt": ("STRING", {"default": "", "multiline": True}),
+                "export_filename": ("STRING", {"default": ""}),
                 "skill_root": ("STRING", {"default": ""}),
                 "manifest_path": ("STRING", {"default": str(DEFAULT_IMAGE_PROMPT_MANIFEST_PATH)}),
             },
@@ -176,11 +205,13 @@ class RyanACPImagePromptAgent:
         profile_path,
         workspace_root,
         session_id,
+        export_to_file,
         image_paths="",
         style="",
         subject="",
         scene="",
         extra_prompt="",
+        export_filename="",
         skill_root="",
         manifest_path=str(DEFAULT_IMAGE_PROMPT_MANIFEST_PATH),
     ):
@@ -190,7 +221,7 @@ class RyanACPImagePromptAgent:
             scene=scene,
             extra_prompt=extra_prompt,
         )
-        return run_fixed_acp_agent(
+        response_text, session_dir, raw_json = run_fixed_acp_agent(
             manifest_path=manifest_path,
             profile_path=profile_path,
             workspace_root=workspace_root,
@@ -200,6 +231,15 @@ class RyanACPImagePromptAgent:
             image_paths=image_paths,
             extra_user_lines=extra,
         )
+        _maybe_export_prompt(
+            export_to_file=export_to_file,
+            response_text=response_text,
+            node_name="Ryan Image Prompt Agent",
+            node_slug=NODE_SLUG_IMAGE_PROMPT,
+            session_id=session_id,
+            export_filename=export_filename,
+        )
+        return response_text, session_dir, raw_json
 
 
 class RyanACPVideoPromptAgent:
@@ -211,11 +251,13 @@ class RyanACPVideoPromptAgent:
                 "profile_path": ("STRING", {"default": str(DEFAULT_PROFILE_PATH)}),
                 "workspace_root": ("STRING", {"default": "output/acp_workspace"}),
                 "session_id": ("STRING", {"default": "session_video_prompt"}),
+                "export_to_file": ("BOOLEAN", {"default": False}),
             },
             "optional": {
                 "image_paths": ("STRING", {"default": "", "multiline": True}),
                 "task": ("STRING", {"default": "", "multiline": True}),
                 "extra_prompt": ("STRING", {"default": "", "multiline": True}),
+                "export_filename": ("STRING", {"default": ""}),
                 "skill_root": ("STRING", {"default": ""}),
                 "manifest_path": ("STRING", {"default": str(DEFAULT_VIDEO_PROMPT_MANIFEST_PATH)}),
             },
@@ -232,14 +274,16 @@ class RyanACPVideoPromptAgent:
         profile_path,
         workspace_root,
         session_id,
+        export_to_file,
         image_paths="",
         task="",
         extra_prompt="",
+        export_filename="",
         skill_root="",
         manifest_path=str(DEFAULT_VIDEO_PROMPT_MANIFEST_PATH),
     ):
         extra = _format_optional_fields(task=task, extra_prompt=extra_prompt)
-        return run_fixed_acp_agent(
+        response_text, session_dir, raw_json = run_fixed_acp_agent(
             manifest_path=manifest_path,
             profile_path=profile_path,
             workspace_root=workspace_root,
@@ -249,6 +293,15 @@ class RyanACPVideoPromptAgent:
             image_paths=image_paths,
             extra_user_lines=extra,
         )
+        _maybe_export_prompt(
+            export_to_file=export_to_file,
+            response_text=response_text,
+            node_name="Ryan Video Prompt Agent",
+            node_slug=NODE_SLUG_VIDEO_PROMPT,
+            session_id=session_id,
+            export_filename=export_filename,
+        )
+        return response_text, session_dir, raw_json
 
 
 class RyanACPImageAnalyzeAgent:
@@ -313,7 +366,8 @@ class RyanACPImageAnalyzeAgent:
             extra_user_lines=extra,
         )
         if export_to_file:
-            export_prompt_to_file(
+            _maybe_export_prompt(
+                export_to_file=True,
                 response_text=response_text,
                 node_name="Ryan Image Analyze Agent",
                 node_slug=NODE_SLUG_IMAGE_ANALYZE,

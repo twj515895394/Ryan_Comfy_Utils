@@ -14,6 +14,8 @@ class TestACPVideoPromptNode(unittest.TestCase):
         optional = RyanACPVideoPromptAgent.INPUT_TYPES()["optional"]
         self.assertIn("task", optional)
         self.assertIn("image_paths", optional)
+        required = RyanACPVideoPromptAgent.INPUT_TYPES()["required"]
+        self.assertIn("export_to_file", required)
 
     @patch("ryan_comfy_utils.nodes.acp_nodes.run_fixed_acp_agent")
     def test_run_text_only(self, run_fixed):
@@ -24,6 +26,7 @@ class TestACPVideoPromptNode(unittest.TestCase):
             profile_path="p",
             workspace_root="/tmp/w",
             session_id="s2",
+            export_to_file=False,
             image_paths="",
             task="5s clip",
             extra_prompt="",
