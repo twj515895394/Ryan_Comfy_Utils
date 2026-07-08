@@ -1,0 +1,20 @@
+{
+  "default": "openai",
+  "profiles": {
+    "openai": {
+      "base_url": "https://api.openai.com/v1",
+      "api_key_env": "OPENAI_API_KEY",
+      "default_model": "gpt-4.1"
+    },
+    "siliconflow": {
+      "base_url": "https://api.siliconflow.cn/v1",
+      "api_key_env": "SILICONFLOW_API_KEY",
+      "default_model": "Qwen/Qwen2.5-VL-72B-Instruct"
+    },
+    "local_openai_compatible": {
+      "base_url": "http://127.0.0.1:8000/v1",
+      "api_key": "EMPTY",
+      "default_model": "local-model"
+    }
+  }
+}
