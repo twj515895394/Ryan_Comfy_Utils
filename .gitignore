@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.env
+.DS_Store
+
+# local private config
+ryan_comfy_utils/config/llm_profiles.json
+
+# local outputs / temp
+outputs/
+temp/
