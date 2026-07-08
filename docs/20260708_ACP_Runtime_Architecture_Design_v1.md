@@ -21,10 +21,10 @@ ACP 在 Ryan_Comfy_Utils 中不是业务 Skill 本身，而是连接本地 Agent
 ComfyUI Workflow
         |
         v
-固定 Agent Adapter Node
+Agent Adapter Node
         |
         v
-Node Manifest
+Skill Resolver
         |
         v
 Context Builder
@@ -60,27 +60,66 @@ Skill Repository
 - IMAGE / STRING 类型
 - Node 定义
 
-### 固定 Agent Adapter Node
+### Agent Adapter Node
 
 ComfyUI 层固定节点。
 
 负责：
 
 - 接收 ComfyUI 输入
-- 选择 Skill ID
-- 选择 Context Template
-- 定义输出 Contract
+- 提供用户交互入口
+- 定义输入输出 Contract
 - 将结果映射为 ComfyUI 类型
 
-节点本身不是由 Skill 动态生成。
+节点不会由 Skill 动态生成。
 
-### Node Manifest
+## Skill Resolver
+
+负责 Node 与 Skill 的绑定关系。
+
+支持两种模式：
+
+### Fixed Skill Binding
+
+适合普通用户和高频能力。
+
+例如：
+
+```
+Ryan Video Prompt Agent
+        |
+        v
+video_prompt_generator
+```
+
+用户无需选择 Skill。
+
+### User Selectable Skill
+
+适合高级用户。
+
+例如：
+
+```
+Ryan ACP Universal Agent
+        |
+        v
+用户选择 Skill:
+- video_prompt_generator
+- storyboard_director
+- image_analyzer
+```
+
+两种模式共用同一个 Runtime，不存在两套执行链。
+
+## Node Manifest
 
 负责描述固定节点如何调用 Skill。
 
 负责：
 
-- 绑定 Skill ID
+- 绑定默认 Skill ID
+- 定义是否允许用户选择 Skill
 - 定义 ComfyUI 输入
 - 定义 Context Template
 - 定义输出 Contract
@@ -88,7 +127,7 @@ ComfyUI 层固定节点。
 
 不负责生成 ComfyUI Node。
 
-### Context Template
+## Context Template
 
 只负责输入上下文封装。
 
@@ -111,9 +150,11 @@ ComfyUI 层固定节点。
 {input.images}
 
 请执行当前 Skill。
+
+输出必须符合当前 Node Output Contract。
 ```
 
-### ACP Runtime
+## ACP Runtime
 
 负责：
 
@@ -161,15 +202,16 @@ Claude/Codex
 
 ## 6. Skill 调用流程
 
-1. 固定 Agent Node 接收 ComfyUI 输入。
-2. 创建 ACP Session。
-3. 保存图片/文件资源。
-4. 加载 Skill 目录。
-5. 加载 Context Template。
-6. 生成 Agent Context。
-7. 调用 Claude/Codex CLI。
-8. 根据 Node Output Contract 解析结果。
-9. 输出 ComfyUI 类型。
+1. Agent Adapter Node 接收 ComfyUI 输入。
+2. Skill Resolver 确定 Skill（固定绑定或用户选择）。
+3. 创建 ACP Session。
+4. 保存图片/文件资源。
+5. 加载 Skill 目录。
+6. 加载 Context Template。
+7. 生成 Agent Context。
+8. 调用 Claude/Codex CLI。
+9. 根据 Node Output Contract 解析结果。
+10. 输出 ComfyUI 类型。
 
 ## 7. 后续待设计
 
