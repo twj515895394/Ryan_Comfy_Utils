@@ -21,7 +21,7 @@ ACP 在 Ryan_Comfy_Utils 中不是业务 Skill 本身，而是连接本地 Agent
 ComfyUI Workflow
         |
         v
-Skill Adapter Node
+固定 Agent Adapter Node
         |
         v
 Node Manifest
@@ -37,7 +37,7 @@ ACP Runtime
         +---- Codex CLI
         |
         v
-Skill
+Skill Repository
 ```
 
 ## 3. 核心职责划分
@@ -60,9 +60,23 @@ Skill
 - IMAGE / STRING 类型
 - Node 定义
 
+### 固定 Agent Adapter Node
+
+ComfyUI 层固定节点。
+
+负责：
+
+- 接收 ComfyUI 输入
+- 选择 Skill ID
+- 选择 Context Template
+- 定义输出 Contract
+- 将结果映射为 ComfyUI 类型
+
+节点本身不是由 Skill 动态生成。
+
 ### Node Manifest
 
-负责 ComfyUI 适配契约。
+负责描述固定节点如何调用 Skill。
 
 负责：
 
@@ -71,6 +85,8 @@ Skill
 - 定义 Context Template
 - 定义输出 Contract
 - 定义结果映射
+
+不负责生成 ComfyUI Node。
 
 ### Context Template
 
@@ -145,7 +161,7 @@ Claude/Codex
 
 ## 6. Skill 调用流程
 
-1. Node 接收 ComfyUI 输入。
+1. 固定 Agent Node 接收 ComfyUI 输入。
 2. 创建 ACP Session。
 3. 保存图片/文件资源。
 4. 加载 Skill 目录。
@@ -158,7 +174,7 @@ Claude/Codex
 ## 7. 后续待设计
 
 - Node Manifest Schema
-- Dynamic Node Engine
+- Skill Binding Runtime
 - Context Template Engine
 - Output Parser
 - ACP Profile Schema
