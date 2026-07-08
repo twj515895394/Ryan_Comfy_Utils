@@ -1,0 +1,19 @@
+{
+  "node_id": "ryan.acp.universal_agent",
+  "skill_id": "",
+  "mode": "selectable",
+  "context_template": "读取 Skill:\n{skill_directory}\n\n用户输入:\n{input.text}\n",
+  "input_contract": {
+    "text": true,
+    "images": false,
+    "files": false
+  },
+  "output_contract": {
+    "type": "text",
+    "fields": ["response_text", "raw_result_json"]
+  },
+  "result_mapping": {
+    "response_text": "outputs.response_text",
+    "raw_result_json": "raw_result_json"
+  }
+}

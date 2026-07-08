@@ -1,0 +1,10 @@
+{
+  "status": "ok",
+  "outputs": {
+    "response_text": "hello from acp"
+  },
+  "raw_result_json": {
+    "stdout": "hello from acp",
+    "stderr": ""
+  }
+}
