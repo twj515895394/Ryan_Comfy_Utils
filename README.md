@@ -8,6 +8,8 @@ Ryan Comfy Utils 是一个自用型 ComfyUI 工具节点集合，重点面向：
 - 视频帧首尾帧 / 均匀采样
 - 后续扩展 ACP / Skill / Agent 工具节点
 
+多图输入（默认 1 路 `image_01`，节点上 **Ryan + 图片** 最多 10 路）见 `docs/agents/comfy-multi-image-inputs.md`。
+
 ## 第一版节点
 
 ### Ryan ACP Universal Agent

@@ -1,8 +1,9 @@
 import json
 
 from ..core.config_loader import list_profile_names
-from ..core.image_utils import pil_to_data_url, resize_max_side, tensor_batch_to_pil
+from ..core.image_utils import pil_to_data_url, resize_max_side
 from ..core.llm_client import RyanOpenAICompatibleClient
+from .comfy_image_inputs import build_image_slot_input_types, flatten_slot_tensors_to_pil, slots_from_explicit_args
 
 
 def _profiles():
@@ -74,9 +75,7 @@ class RyanLLMVisionChat:
                 "jpeg_quality": ("INT", {"default": 85, "min": 50, "max": 100, "step": 1}),
                 "extra_body_json": ("STRING", {"default": "", "multiline": True}),
             },
-            "optional": {
-                "images": ("IMAGE",),
-            }
+            "optional": build_image_slot_input_types(include_paths=False),
         }
 
     RETURN_TYPES = ("STRING", "STRING", "STRING")
@@ -84,9 +83,49 @@ class RyanLLMVisionChat:
     FUNCTION = "run"
     CATEGORY = "Ryan Utils / LLM"
 
-    def run(self, profile, model_override, system_prompt, user_prompt, temperature, max_tokens, top_p, timeout_seconds, retry_count, max_images, image_max_side, image_format, jpeg_quality, extra_body_json, images=None):
+    def run(
+        self,
+        profile,
+        model_override,
+        system_prompt,
+        user_prompt,
+        temperature,
+        max_tokens,
+        top_p,
+        timeout_seconds,
+        retry_count,
+        max_images,
+        image_max_side,
+        image_format,
+        jpeg_quality,
+        extra_body_json,
+        image_slot_count=1,
+        image_01=None,
+        image_02=None,
+        image_03=None,
+        image_04=None,
+        image_05=None,
+        image_06=None,
+        image_07=None,
+        image_08=None,
+        image_09=None,
+        image_10=None,
+    ):
+        slots = slots_from_explicit_args(
+            image_slot_count,
+            image_01=image_01,
+            image_02=image_02,
+            image_03=image_03,
+            image_04=image_04,
+            image_05=image_05,
+            image_06=image_06,
+            image_07=image_07,
+            image_08=image_08,
+            image_09=image_09,
+            image_10=image_10,
+        )
         content = []
-        pil_images = tensor_batch_to_pil(images)[: int(max_images or 10)] if images is not None else []
+        pil_images = flatten_slot_tensors_to_pil(slots, max_total=int(max_images or 10))
         for img in pil_images:
             resized = resize_max_side(img, image_max_side)
             content.append({

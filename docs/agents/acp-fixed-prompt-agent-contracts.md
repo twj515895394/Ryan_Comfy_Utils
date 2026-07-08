@@ -29,7 +29,7 @@
 | `export_filename` | 否 | 可选 |
 | `profile_path` / `workspace_root` / `session_id` / `skill_root` | 运行参数 | `skill_root` 空则使用包内 fixtures skills |
 
-v1 参考图仅支持路径字符串，不支持 ComfyUI `IMAGE` tensor 直连。
+v1 参考图：**ComfyUI `IMAGE` 槽位 `image_01`…`image_10`（默认 1 个，界面「+」最多 10）**，并可选多行 `image_paths`。详见 `docs/agents/comfy-multi-image-inputs.md`。
 
 ## Ryan Video Prompt Agent
 

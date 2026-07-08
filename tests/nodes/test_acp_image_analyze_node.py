@@ -17,13 +17,14 @@ class TestACPImageAnalyzeNode(unittest.TestCase):
         required = RyanACPImageAnalyzeAgent.INPUT_TYPES()["required"]
         self.assertIn("category", required)
         self.assertIn("export_to_file", required)
-        self.assertIn("image_paths", required)
+        optional = RyanACPImageAnalyzeAgent.INPUT_TYPES()["optional"]
+        self.assertIn("image_01", optional)
+        self.assertIn("image_paths", optional)
 
     def test_run_requires_image_paths(self):
         node = RyanACPImageAnalyzeAgent()
         with self.assertRaises(ValueError):
             node.run(
-                image_paths="",
                 user_text="",
                 category="general",
                 output_language="bilingual",
@@ -31,6 +32,7 @@ class TestACPImageAnalyzeNode(unittest.TestCase):
                 workspace_root="/tmp",
                 session_id="s",
                 export_to_file=False,
+                image_paths="",
             )
 
     @patch("ryan_comfy_utils.nodes.acp_nodes.export_prompt_to_file")
