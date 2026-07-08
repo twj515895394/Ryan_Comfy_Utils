@@ -10,6 +10,34 @@ Ryan Comfy Utils 是一个自用型 ComfyUI 工具节点集合，重点面向：
 
 ## 第一版节点
 
+### Ryan ACP Universal Agent
+
+分类：`Ryan Utils / ACP`
+
+最小版 ACP Agent 节点。当前阶段只支持文本输入和文本输出，用于打通：
+
+- manifest/profile 加载
+- session/workspace 创建
+- skill/context 组装
+- CLI 执行
+- 文本结果回传
+
+输入重点：
+
+- `skill_id`
+- `user_text`
+- `profile_path`
+- `manifest_path`
+- `workspace_root`
+- `session_id`
+- `skill_root`
+
+输出：
+
+- `response_text`
+- `session_dir`
+- `raw_result_json`
+
 ### Ryan LLM Chat
 
 分类：`Ryan Utils / LLM`
