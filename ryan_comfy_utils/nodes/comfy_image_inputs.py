@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from ..acp.image_slot_paths import staging_dir_for_session
+from ..acp.image_slot_paths import session_input_images_dir
 
 MAX_RYAN_IMAGE_SLOTS = 10
 IMAGE_SLOT_PREFIX = "image_"
@@ -111,16 +111,30 @@ def slots_from_explicit_args(image_slot_count, **slot_values) -> list[Any]:
 
 def resolve_image_inputs_for_acp(
     *,
-    workspace_root: Path,
-    session_id: str,
+    workspace_root: Path | None = None,
+    session_id: str = "",
+    session_dir: Path | None = None,
     image_paths_text: str,
     image_slots: list[Any],
     parse_paths,
 ) -> list[str]:
-    """合并多行路径与 IMAGE 槽位落盘路径，供 execute_text_session 使用。"""
+    """合并多行路径与 IMAGE 槽位落盘路径，供 execute_text_session 使用。
+
+    优先使用已准备好的 session_dir；否则用 workspace_root+session_id 推导。
+    槽位直接写入 session_dir/input/images，避免额外 staging 目录。
+    """
     paths = list(parse_paths(image_paths_text))
     connected = trim_trailing_empty_slots(image_slots)
-    if connected:
-        staging = staging_dir_for_session(workspace_root, session_id)
-        paths.extend(materialize_image_slots_to_directory(staging, connected))
+    if not connected:
+        return paths
+
+    if session_dir is None:
+        if workspace_root is None or not session_id:
+            raise ValueError("session_dir or (workspace_root + session_id) required for image slots")
+        from ..acp.workspace import prepare_workspace
+
+        session_dir = prepare_workspace(workspace_root, session_id)
+
+    target = session_input_images_dir(session_dir)
+    paths.extend(materialize_image_slots_to_directory(target, connected))
     return paths

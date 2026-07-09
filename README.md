@@ -2,21 +2,23 @@
 
 Ryan Comfy Utils 是一个自用型 ComfyUI 工具节点集合，重点面向：
 
+- **ACP Runtime**：通过固定 Agent 节点调用本地 Claude/Codex CLI（Skill 与 Node 解耦）
 - OpenAI-Compatible LLM / Vision 调用
-- Prompt 模板管理
+- Prompt 模板管理与文件导出
 - 批量目录视频加载与基础抽帧控制
 - 视频帧首尾帧 / 均匀采样
-- 后续扩展 ACP / Skill / Agent 工具节点
 
 多图输入（默认 1 路 `image_01`，节点上 **Ryan + 图片** 最多 10 路）见 `docs/agents/comfy-multi-image-inputs.md`。
 
-## 第一版节点
+ACP Profile / CLI 占位符与失败语义见 `docs/agents/acp-runtime-cli-profile.md`。CLI 非 0 退出码、超时或非法结果会抛异常并中断 workflow。
+
+## 节点一览
 
 ### Ryan ACP Universal Agent
 
 分类：`Ryan Utils / ACP`
 
-最小版 ACP Agent 节点。当前阶段只支持文本输入和文本输出，用于打通：
+通用 ACP Agent 节点（Selectable Skill）。支持文本、多图槽位与 `image_paths`，打通：
 
 - manifest/profile 加载
 - session/workspace 创建
@@ -62,7 +64,7 @@ Ryan Comfy Utils 是一个自用型 ComfyUI 工具节点集合，重点面向：
 
 分类：`Ryan Utils / ACP`
 
-固定绑定 `image_prompt_reverse`，从参考图**反推**可用于 AI 绘图的提示词（默认中英双语）。`category` 选择反推模板类型；**必须**提供 `image_paths`。
+固定绑定 `image_prompt_reverse`，从参考图**反推**可用于 AI 绘图的提示词（默认中英双语）。`category` 选择反推模板类型；**必须**提供参考图：连接 `image_01`… 或填写 `image_paths`（满足其一即可）。
 
 `export_to_file` 开关（默认关）：开启后将 prompt 写入 `output/ryan_acp_exports/image_analyze/`。与 Image Prompt 节点分工见 `docs/agents/acp-fixed-prompt-agent-contracts.md`。
 

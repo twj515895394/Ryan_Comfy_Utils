@@ -29,3 +29,9 @@ output/ryan_acp_exports/<node_slug>/
 ## 路径根目录
 
 ComfyUI `output`（`folder_paths`），单测可用临时目录注入 `output_root`。
+
+## 路径安全
+
+- `output_subdir` / `session_id` / `export_filename` / `skill_id` 禁止 `..`、绝对路径与路径分隔符穿越。
+- 导出路径 resolve 后必须仍位于 ComfyUI `output`（或注入的 `output_root`）之下。
+- `export_filename` 仅取 basename（不含目录）。

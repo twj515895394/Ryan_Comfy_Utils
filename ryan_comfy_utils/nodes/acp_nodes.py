@@ -10,8 +10,11 @@ from ..acp.file_exporter import (
 )
 from ..acp.runtime import execute_text_session, map_result_fields
 from ..acp.skill_resolver import resolve_skill_binding
+from ..acp.workspace import prepare_workspace
 from .comfy_image_inputs import (
+    MAX_RYAN_IMAGE_SLOTS,
     build_image_slot_input_types,
+    image_slot_name,
     resolve_image_inputs_for_acp,
     slots_from_explicit_args,
 )
@@ -29,6 +32,7 @@ DEFAULT_VIDEO_PROMPT_MANIFEST_PATH = (
 DEFAULT_IMAGE_ANALYZE_MANIFEST_PATH = (
     PACKAGE_ROOT / "acp" / "fixtures" / "manifests" / "image_analyze_agent.json"
 )
+DEFAULT_WORKSPACE_ROOT = "output/acp_workspace"
 
 IMAGE_REVERSE_CATEGORIES = (
     "general",
@@ -57,6 +61,17 @@ def _resolve_path(path_text: str) -> Path:
     if path.is_absolute() or path.exists():
         return path
     return Path.cwd() / path
+
+
+def _resolve_workspace_root(node_value: str, profile: dict) -> Path:
+    """节点非空优先；否则 profile.workspace_root；再否则默认相对路径。"""
+    text = (node_value or "").strip()
+    if text:
+        return Path(text)
+    profile_root = (profile.get("workspace_root") or "").strip()
+    if profile_root:
+        return Path(profile_root)
+    return Path(DEFAULT_WORKSPACE_ROOT)
 
 
 def parse_multiline_paths(paths_text: str) -> list[str]:
@@ -105,6 +120,16 @@ def _maybe_export_prompt(
     )
 
 
+def _collect_run_image_slots(image_slot_count=1, **image_kwargs):
+    """从 run() 的 image_01..image_10 参数收集槽位，避免四节点复制 10 个形参组装。"""
+    slot_values = {}
+    for i in range(1, MAX_RYAN_IMAGE_SLOTS + 1):
+        name = image_slot_name(i)
+        if name in image_kwargs:
+            slot_values[name] = image_kwargs[name]
+    return slots_from_explicit_args(image_slot_count, **slot_values)
+
+
 def run_fixed_acp_agent(
     *,
     manifest_path: str,
@@ -131,16 +156,18 @@ def run_fixed_acp_agent(
     if extra_user_lines.strip():
         merged_text = f"{merged_text}\n\n{extra_user_lines.strip()}".strip()
 
+    workspace = _resolve_workspace_root(workspace_root, profile)
+    # 先准备 session，槽位可直接写入 session/input/images，避免额外 staging
+    session_dir = prepare_workspace(workspace, session_id)
     image_inputs = resolve_image_inputs_for_acp(
-        workspace_root=Path(workspace_root),
-        session_id=session_id,
+        session_dir=session_dir,
         image_paths_text=image_paths,
         image_slots=image_slots or [],
         parse_paths=parse_multiline_paths,
     )
 
     result = execute_text_session(
-        workspace_root=Path(workspace_root),
+        workspace_root=workspace,
         session_id=session_id,
         skill_root=binding.skill_root,
         skill_id=binding.skill_id,
@@ -167,7 +194,7 @@ class RyanACPUniversalAgent:
                 "user_text": ("STRING", {"default": "", "multiline": True}),
                 "profile_path": ("STRING", {"default": str(DEFAULT_PROFILE_PATH)}),
                 "manifest_path": ("STRING", {"default": str(DEFAULT_MANIFEST_PATH)}),
-                "workspace_root": ("STRING", {"default": "output/acp_workspace"}),
+                "workspace_root": ("STRING", {"default": DEFAULT_WORKSPACE_ROOT}),
                 "session_id": ("STRING", {"default": "session_manual"}),
                 "skill_root": ("STRING", {"default": ""}),
             },
@@ -190,16 +217,7 @@ class RyanACPUniversalAgent:
         skill_root,
         image_slot_count=1,
         image_paths="",
-        image_01=None,
-        image_02=None,
-        image_03=None,
-        image_04=None,
-        image_05=None,
-        image_06=None,
-        image_07=None,
-        image_08=None,
-        image_09=None,
-        image_10=None,
+        **image_kwargs,
     ):
         manifest = load_manifest(_resolve_path(manifest_path))
         profile = load_profile(_resolve_path(profile_path))
@@ -209,28 +227,17 @@ class RyanACPUniversalAgent:
             user_skill_id=skill_id,
             allow_user_skill=True,
         )
-        slots = slots_from_explicit_args(
-            image_slot_count,
-            image_01=image_01,
-            image_02=image_02,
-            image_03=image_03,
-            image_04=image_04,
-            image_05=image_05,
-            image_06=image_06,
-            image_07=image_07,
-            image_08=image_08,
-            image_09=image_09,
-            image_10=image_10,
-        )
+        slots = _collect_run_image_slots(image_slot_count, **image_kwargs)
+        workspace = _resolve_workspace_root(workspace_root, profile)
+        session_dir = prepare_workspace(workspace, session_id)
         image_inputs = resolve_image_inputs_for_acp(
-            workspace_root=Path(workspace_root),
-            session_id=session_id,
+            session_dir=session_dir,
             image_paths_text=image_paths,
             image_slots=slots,
             parse_paths=parse_multiline_paths,
         )
         result = execute_text_session(
-            workspace_root=Path(workspace_root),
+            workspace_root=workspace,
             session_id=session_id,
             skill_root=binding.skill_root,
             skill_id=binding.skill_id,
@@ -254,7 +261,7 @@ class RyanACPImagePromptAgent:
             "required": {
                 "user_text": ("STRING", {"default": "", "multiline": True}),
                 "profile_path": ("STRING", {"default": str(DEFAULT_PROFILE_PATH)}),
-                "workspace_root": ("STRING", {"default": "output/acp_workspace"}),
+                "workspace_root": ("STRING", {"default": DEFAULT_WORKSPACE_ROOT}),
                 "session_id": ("STRING", {"default": "session_image_prompt"}),
                 "export_to_file": ("BOOLEAN", {"default": False}),
             },
@@ -284,16 +291,6 @@ class RyanACPImagePromptAgent:
         export_to_file,
         image_slot_count=1,
         image_paths="",
-        image_01=None,
-        image_02=None,
-        image_03=None,
-        image_04=None,
-        image_05=None,
-        image_06=None,
-        image_07=None,
-        image_08=None,
-        image_09=None,
-        image_10=None,
         style="",
         subject="",
         scene="",
@@ -301,6 +298,7 @@ class RyanACPImagePromptAgent:
         export_filename="",
         skill_root="",
         manifest_path=str(DEFAULT_IMAGE_PROMPT_MANIFEST_PATH),
+        **image_kwargs,
     ):
         extra = _format_optional_fields(
             style=style,
@@ -308,19 +306,7 @@ class RyanACPImagePromptAgent:
             scene=scene,
             extra_prompt=extra_prompt,
         )
-        slots = slots_from_explicit_args(
-            image_slot_count,
-            image_01=image_01,
-            image_02=image_02,
-            image_03=image_03,
-            image_04=image_04,
-            image_05=image_05,
-            image_06=image_06,
-            image_07=image_07,
-            image_08=image_08,
-            image_09=image_09,
-            image_10=image_10,
-        )
+        slots = _collect_run_image_slots(image_slot_count, **image_kwargs)
         response_text, session_dir, raw_json = run_fixed_acp_agent(
             manifest_path=manifest_path,
             profile_path=profile_path,
@@ -350,7 +336,7 @@ class RyanACPVideoPromptAgent:
             "required": {
                 "user_text": ("STRING", {"default": "", "multiline": True}),
                 "profile_path": ("STRING", {"default": str(DEFAULT_PROFILE_PATH)}),
-                "workspace_root": ("STRING", {"default": "output/acp_workspace"}),
+                "workspace_root": ("STRING", {"default": DEFAULT_WORKSPACE_ROOT}),
                 "session_id": ("STRING", {"default": "session_video_prompt"}),
                 "export_to_file": ("BOOLEAN", {"default": False}),
             },
@@ -378,36 +364,15 @@ class RyanACPVideoPromptAgent:
         export_to_file,
         image_slot_count=1,
         image_paths="",
-        image_01=None,
-        image_02=None,
-        image_03=None,
-        image_04=None,
-        image_05=None,
-        image_06=None,
-        image_07=None,
-        image_08=None,
-        image_09=None,
-        image_10=None,
         task="",
         extra_prompt="",
         export_filename="",
         skill_root="",
         manifest_path=str(DEFAULT_VIDEO_PROMPT_MANIFEST_PATH),
+        **image_kwargs,
     ):
         extra = _format_optional_fields(task=task, extra_prompt=extra_prompt)
-        slots = slots_from_explicit_args(
-            image_slot_count,
-            image_01=image_01,
-            image_02=image_02,
-            image_03=image_03,
-            image_04=image_04,
-            image_05=image_05,
-            image_06=image_06,
-            image_07=image_07,
-            image_08=image_08,
-            image_09=image_09,
-            image_10=image_10,
-        )
+        slots = _collect_run_image_slots(image_slot_count, **image_kwargs)
         response_text, session_dir, raw_json = run_fixed_acp_agent(
             manifest_path=manifest_path,
             profile_path=profile_path,
@@ -439,7 +404,7 @@ class RyanACPImageAnalyzeAgent:
                 "category": (list(IMAGE_REVERSE_CATEGORIES), {"default": "general"}),
                 "output_language": (list(OUTPUT_LANGUAGE_OPTIONS), {"default": "bilingual"}),
                 "profile_path": ("STRING", {"default": str(DEFAULT_PROFILE_PATH)}),
-                "workspace_root": ("STRING", {"default": "output/acp_workspace"}),
+                "workspace_root": ("STRING", {"default": DEFAULT_WORKSPACE_ROOT}),
                 "session_id": ("STRING", {"default": "session_image_analyze"}),
                 "export_to_file": ("BOOLEAN", {"default": False}),
             },
@@ -468,34 +433,13 @@ class RyanACPImageAnalyzeAgent:
         export_to_file,
         image_slot_count=1,
         image_paths="",
-        image_01=None,
-        image_02=None,
-        image_03=None,
-        image_04=None,
-        image_05=None,
-        image_06=None,
-        image_07=None,
-        image_08=None,
-        image_09=None,
-        image_10=None,
         extra_prompt="",
         export_filename="",
         skill_root="",
         manifest_path=str(DEFAULT_IMAGE_ANALYZE_MANIFEST_PATH),
+        **image_kwargs,
     ):
-        slots = slots_from_explicit_args(
-            image_slot_count,
-            image_01=image_01,
-            image_02=image_02,
-            image_03=image_03,
-            image_04=image_04,
-            image_05=image_05,
-            image_06=image_06,
-            image_07=image_07,
-            image_08=image_08,
-            image_09=image_09,
-            image_10=image_10,
-        )
+        slots = _collect_run_image_slots(image_slot_count, **image_kwargs)
         _require_image_paths_or_slots(image_paths, slots)
         extra = _format_optional_fields(
             category=category,

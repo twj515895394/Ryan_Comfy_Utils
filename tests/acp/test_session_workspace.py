@@ -28,3 +28,10 @@ class TestSessionWorkspace(unittest.TestCase):
             self.assertEqual(record["skill_id"], "video_prompt_generator")
             self.assertEqual(metadata["runner"], "codex_cli")
             self.assertTrue((workspace / "context.json").exists())
+
+
+    def test_prepare_workspace_rejects_bad_session_id(self):
+        from ryan_comfy_utils.acp.workspace import prepare_workspace
+        with tempfile.TemporaryDirectory() as tmp:
+            with self.assertRaises(ValueError):
+                prepare_workspace(Path(tmp), "../escape")

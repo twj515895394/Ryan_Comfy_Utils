@@ -44,5 +44,20 @@ class TestFileExporter(unittest.TestCase):
         self.assertTrue(md.startswith("---"))
 
 
+    def test_write_text_export_rejects_traversal(self):
+        from ryan_comfy_utils.acp.file_exporter import write_text_export
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            with self.assertRaises(ValueError):
+                write_text_export(
+                    text="x",
+                    output_subdir="../etc",
+                    filename="x",
+                    extension="txt",
+                    append_timestamp=False,
+                    output_root=root,
+                )
+
+
 if __name__ == "__main__":
     unittest.main()

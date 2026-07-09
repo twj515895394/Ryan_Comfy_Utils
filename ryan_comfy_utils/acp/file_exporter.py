@@ -3,6 +3,8 @@
 from datetime import datetime, timezone
 from pathlib import Path
 
+from .path_safety import resolve_under_root, sanitize_path_component, sanitize_relative_subdir
+
 
 NODE_SLUG_IMAGE_ANALYZE = "image_analyze"
 NODE_SLUG_IMAGE_PROMPT = "image_prompt"
@@ -28,14 +30,22 @@ def build_export_path(
     session_id: str,
     export_filename: str = "",
 ) -> Path:
-    directory = output_root / EXPORT_SUBDIR / node_slug
+    safe_slug = sanitize_path_component(node_slug, field="node_slug")
+    directory = resolve_under_root(output_root, EXPORT_SUBDIR, safe_slug)
     directory.mkdir(parents=True, exist_ok=True)
     name = (export_filename or "").strip()
     if name:
-        stem = name if not name.endswith(".md") else name[:-3]
+        # 只取 basename，防止用户传入带路径的 export_filename
+        stem = Path(name).name
+        if stem.endswith(".md"):
+            stem = stem[:-3]
+        stem = sanitize_path_component(stem, field="export_filename")
         filename = f"{stem}.md"
     else:
-        safe_session = "".join(c if c.isalnum() or c in "-_" else "_" for c in session_id)
+        safe_session = sanitize_path_component(
+            "".join(c if c.isalnum() or c in "-_" else "_" for c in session_id) or "session",
+            field="session_id",
+        )
         stamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
         filename = f"{safe_session}_{stamp}.md"
     return directory / filename
@@ -96,13 +106,19 @@ def build_text_export_path(
     *,
     append_timestamp: bool = True,
 ) -> Path:
-    subdir = (output_subdir or "ryan_acp_exports/manual").strip().strip("/")
-    directory = output_root / subdir
+    subdir = sanitize_relative_subdir(
+        output_subdir or "ryan_acp_exports/manual",
+        field="output_subdir",
+    )
+    directory = resolve_under_root(output_root, *subdir.split("/"))
     directory.mkdir(parents=True, exist_ok=True)
     ext = extension.lstrip(".") or "txt"
-    stem = (filename or "export").strip()
+    ext = sanitize_path_component(ext, field="extension")
+    raw_stem = (filename or "export").strip()
+    stem = Path(raw_stem).name
     if stem.endswith(f".{ext}"):
         stem = stem[: -(len(ext) + 1)]
+    stem = sanitize_path_component(stem or "export", field="filename")
     if append_timestamp:
         stamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
         stem = f"{stem}_{stamp}" if stem else stamp

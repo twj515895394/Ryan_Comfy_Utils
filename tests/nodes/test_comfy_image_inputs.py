@@ -35,5 +35,15 @@ class TestComfyImageInputs(unittest.TestCase):
         self.assertEqual(trim_trailing_empty_slots([1, None, 2, None]), [1, None, 2])
 
 
+    def test_resolve_paths_only(self):
+        from ryan_comfy_utils.nodes.comfy_image_inputs import resolve_image_inputs_for_acp
+        paths = resolve_image_inputs_for_acp(
+            image_paths_text="/tmp/a.png\n/tmp/b.png",
+            image_slots=[],
+            parse_paths=lambda t: [x for x in t.splitlines() if x],
+        )
+        self.assertEqual(paths, ["/tmp/a.png", "/tmp/b.png"])
+
+
 if __name__ == "__main__":
     unittest.main()

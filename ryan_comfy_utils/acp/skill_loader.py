@@ -1,5 +1,7 @@
 from pathlib import Path
 
+from .path_safety import sanitize_path_component
+
 # 包内默认 skill 目录，供固定 Prompt Agent 与测试使用
 _DEFAULT_FIXTURES_SKILLS = Path(__file__).resolve().parent / "fixtures" / "skills"
 
@@ -13,7 +15,8 @@ def resolve_skill_root(skill_root_text: str) -> Path:
 
 
 def resolve_skill_directory(skill_root: Path, skill_id: str) -> Path:
-    path = skill_root / skill_id
+    safe_id = sanitize_path_component(skill_id, field="skill_id")
+    path = skill_root / safe_id
     if not path.exists():
         raise FileNotFoundError(f"Skill not found: {path}")
     return path

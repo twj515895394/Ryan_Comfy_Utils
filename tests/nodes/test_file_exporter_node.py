@@ -46,5 +46,20 @@ class TestFileExporterNode(unittest.TestCase):
         self.assertEqual(RyanFileExporter.CATEGORY, "Ryan Utils / File")
 
 
+    def test_json_invalid_wraps_content(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            path = write_text_export(
+                text="not json",
+                extension="json",
+                append_timestamp=False,
+                filename="wrap",
+                output_root=root,
+            )
+            body = Path(path).read_text(encoding="utf-8")
+            self.assertIn('"content"', body)
+            self.assertIn("not json", body)
+
+
 if __name__ == "__main__":
     unittest.main()

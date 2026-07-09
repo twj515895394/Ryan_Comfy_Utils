@@ -55,5 +55,23 @@ class TestSkillResolver(unittest.TestCase):
         self.assertTrue(binding.skill_dir.is_dir())
 
 
+    def test_selectable_empty_both_raises(self):
+        with self.assertRaises(ValueError):
+            resolve_skill_binding(
+                {"skill_id": ""},
+                str(self.root),
+                user_skill_id="",
+                allow_user_skill=True,
+            )
+
+    def test_skill_id_traversal_rejected(self):
+        with self.assertRaises(ValueError):
+            resolve_skill_binding(
+                {"skill_id": "../etc"},
+                str(self.root),
+                allow_user_skill=False,
+            )
+
+
 if __name__ == "__main__":
     unittest.main()

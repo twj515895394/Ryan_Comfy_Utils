@@ -1,4 +1,4 @@
-Status: ready-for-human
+Status: ready-for-agent
 
 # 首批固定绑定 Agent Nodes 选型
 
@@ -42,11 +42,36 @@ Status: ready-for-human
 
 - 第一批固定节点控制在 2 个以内
 - 推荐：
+  - `Ryan Image Prompt Agent`
   - `Ryan Video Prompt Agent`
-  - `Ryan Image Analyze Agent`
 - 暂时继续保留在 `Ryan ACP Universal Agent`：
+  - `Ryan Image Analyze Agent`
   - `Ryan Storyboard Agent`
   - `Ryan Character Design Agent`
   - `Ryan File Generator Agent`
 
 等待人工确认后，再进入固定节点实现阶段。
+
+### 2026-07-08 用户确认更新
+
+用户已明确补充：
+
+- 优先级最高的是：
+  - `Ryan Image Prompt Agent`
+  - `Ryan Video Prompt Agent`
+- 这两个 agent 的目标是生成适用于任意风格、题材、场景的提示词
+
+基于该确认，选型草案已更新：
+
+` .scratch/acp-runtime-foundation/fixed-agent-node-selection.md `
+
+当前可将后续固定节点实现准备推进到 agent 开发阶段。
+
+### 2026-07-08 实现切片落库
+
+已拆分为 AFK 垂直切片与实施计划，不再单独增加 HITL issue：
+
+- `07-prompt-agent-shared-assets.md`
+- `08-image-prompt-agent.md`
+- `09-video-prompt-agent.md`
+- `docs/superpowers/plans/2026-07-08-acp-fixed-prompt-agents.md`

@@ -1,5 +1,6 @@
 from pathlib import Path
 
 
-def staging_dir_for_session(workspace_root: Path, session_id: str) -> Path:
-    return workspace_root / "_ryan_image_staging" / session_id
+def session_input_images_dir(session_dir: Path) -> Path:
+    """槽位 PNG 直接写入 session 内 input/images，避免额外 staging 树。"""
+    return session_dir / "input" / "images"

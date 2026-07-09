@@ -1,6 +1,6 @@
 {
   "runner": "codex_cli",
-  "command": ["codex", "exec"],
+  "command": ["codex", "exec", "{context}"],
   "workspace_root": "output/acp_workspace",
   "timeout_seconds": 300,
   "environment": {}
