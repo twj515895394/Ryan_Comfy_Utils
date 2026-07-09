@@ -36,6 +36,14 @@ Status: ready-for-agent
 
 ## 评论
 
+### 2026-07-09 命名与范围 supersede
+
+- 交接 `handoff-20260709-104808-acp-resolver-file-output.md`：**不再使用** `Ryan File Generator Agent`。
+- **已完成**：`export_to_file` + `file_exporter.py`（三 Agent 节点 + 路径约定）。
+- **未完成部分**迁至：
+  - issue **13** `ryan-file-exporter-node.md`（`Ryan File Exporter` 工具节点）
+  - issue **12** 与导出无关；issue **14** 文档校准
+
 ### 2026-07-08
 
 - 用户确认需要 File Generator 能力，用于整理优秀提示词；路径写死 output 子目录；界面按钮开关。

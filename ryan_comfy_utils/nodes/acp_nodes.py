@@ -9,7 +9,7 @@ from ..acp.file_exporter import (
     export_prompt_to_file,
 )
 from ..acp.runtime import execute_text_session, map_result_fields
-from ..acp.skill_loader import resolve_skill_root
+from ..acp.skill_resolver import resolve_skill_binding
 from .comfy_image_inputs import (
     build_image_slot_input_types,
     resolve_image_inputs_for_acp,
@@ -120,9 +120,12 @@ def run_fixed_acp_agent(
 ) -> tuple[str, str, str]:
     manifest = load_manifest(_resolve_path(manifest_path))
     profile = load_profile(_resolve_path(profile_path))
-    skill_id = manifest["skill_id"]
-    if not skill_id:
-        raise ValueError("Fixed manifest must define skill_id")
+    binding = resolve_skill_binding(
+        manifest,
+        skill_root,
+        user_skill_id="",
+        allow_user_skill=False,
+    )
 
     merged_text = (user_text or "").strip()
     if extra_user_lines.strip():
@@ -139,8 +142,8 @@ def run_fixed_acp_agent(
     result = execute_text_session(
         workspace_root=Path(workspace_root),
         session_id=session_id,
-        skill_root=resolve_skill_root(skill_root),
-        skill_id=skill_id,
+        skill_root=binding.skill_root,
+        skill_id=binding.skill_id,
         context_template=manifest["context_template"],
         user_text=merged_text,
         runner_profile=profile,
@@ -200,6 +203,12 @@ class RyanACPUniversalAgent:
     ):
         manifest = load_manifest(_resolve_path(manifest_path))
         profile = load_profile(_resolve_path(profile_path))
+        binding = resolve_skill_binding(
+            manifest,
+            skill_root,
+            user_skill_id=skill_id,
+            allow_user_skill=True,
+        )
         slots = slots_from_explicit_args(
             image_slot_count,
             image_01=image_01,
@@ -223,8 +232,8 @@ class RyanACPUniversalAgent:
         result = execute_text_session(
             workspace_root=Path(workspace_root),
             session_id=session_id,
-            skill_root=resolve_skill_root(skill_root),
-            skill_id=skill_id or manifest["skill_id"],
+            skill_root=binding.skill_root,
+            skill_id=binding.skill_id,
             context_template=manifest["context_template"],
             user_text=user_text,
             runner_profile=profile,

@@ -24,6 +24,8 @@ class TestACPNode(unittest.TestCase):
             "raw_result_json": {"returncode": 0, "stdout": "hello from node", "stderr": ""},
         }
         with tempfile.TemporaryDirectory() as tmpdir:
+            skill_root = Path(tmpdir) / "skills"
+            (skill_root / "video_prompt_generator").mkdir(parents=True)
             manifest_path = Path(tmpdir) / "manifest.json"
             manifest_path.write_text(
                 json.dumps(
@@ -53,8 +55,11 @@ class TestACPNode(unittest.TestCase):
                 manifest_path=str(manifest_path),
                 workspace_root="/tmp/acp_workspace",
                 session_id="session_001",
-                skill_root="/tmp/skills",
+                skill_root=str(skill_root),
             )
+            execute_text_session.assert_called_once()
+            call_kw = execute_text_session.call_args.kwargs
+            self.assertEqual(call_kw["skill_id"], "video_prompt_generator")
             self.assertEqual(response_text, "hello from node")
             self.assertEqual(session_dir, "/tmp/session_001")
             self.assertIn("hello from node", raw_result_json)

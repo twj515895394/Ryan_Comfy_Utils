@@ -66,6 +66,12 @@ Ryan Comfy Utils 是一个自用型 ComfyUI 工具节点集合，重点面向：
 
 `export_to_file` 开关（默认关）：开启后将 prompt 写入 `output/ryan_acp_exports/image_analyze/`。与 Image Prompt 节点分工见 `docs/agents/acp-fixed-prompt-agent-contracts.md`。
 
+### Ryan File Exporter
+
+分类：`Ryan Utils / File`
+
+将任意文本写入 ComfyUI `output` 下子目录（默认 `ryan_acp_exports/manual`），输出 `file_path` 与 `file_text`。可接在任意 Agent 的 `response_text` 之后整理 prompt。详见 `docs/agents/acp-file-export-convention.md`。
+
 ### Ryan LLM Chat
 
 分类：`Ryan Utils / LLM`

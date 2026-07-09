@@ -5,6 +5,7 @@ from .ryan_comfy_utils.nodes.acp_nodes import (
     RyanACPUniversalAgent,
     RyanACPVideoPromptAgent,
 )
+from .ryan_comfy_utils.nodes.file_nodes import RyanFileExporter
 from .ryan_comfy_utils.nodes.prompt_nodes import RyanPromptTemplate
 from .ryan_comfy_utils.nodes.video_nodes import RyanBatchVideoLoader, RyanVideoFrameSampler
 
@@ -20,6 +21,7 @@ NODE_CLASS_MAPPINGS = {
     "Ryan Prompt Template": RyanPromptTemplate,
     "Ryan Batch Video Loader": RyanBatchVideoLoader,
     "Ryan Video Frame Sampler": RyanVideoFrameSampler,
+    "Ryan File Exporter": RyanFileExporter,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
@@ -32,6 +34,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "Ryan Prompt Template": "Ryan Prompt Template",
     "Ryan Batch Video Loader": "Ryan Batch Video Loader",
     "Ryan Video Frame Sampler": "Ryan Video Frame Sampler",
+    "Ryan File Exporter": "Ryan File Exporter",
 }
 
 __all__ = ["NODE_CLASS_MAPPINGS", "NODE_DISPLAY_NAME_MAPPINGS", "WEB_DIRECTORY"]
