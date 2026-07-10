@@ -1,0 +1,7 @@
+{
+  "runner": "claude_cli",
+  "command": ["claude", "-p", "{context}"],
+  "workspace_root": "output/acp_workspace",
+  "timeout_seconds": 300,
+  "environment": {}
+}

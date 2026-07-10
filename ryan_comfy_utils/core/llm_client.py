@@ -55,11 +55,13 @@ class RyanOpenAICompatibleClient:
         max_tokens: int = 4096,
         top_p: float = 1.0,
         retry_count: int = 0,
+        disable_thinking: bool = False,
         extra_body_json: Optional[str] = None,
     ):
-        extra_body = None
-        if extra_body_json and extra_body_json.strip():
-            extra_body = json.loads(extra_body_json)
+        extra_body = {}
+        if disable_thinking:
+            extra_body["enable_thinking"] = False
+            extra_body["reasoning"] = {"exclude": True}
 
         request_payload = {
             "model": self.profile["model"],
@@ -69,8 +71,14 @@ class RyanOpenAICompatibleClient:
             "top_p": float(top_p),
             "stream": False,
         }
+
+        if extra_body_json and extra_body_json.strip():
+            user_extra = json.loads(extra_body_json)
+            if isinstance(user_extra, dict):
+                request_payload.update(user_extra)
+
         if extra_body:
-            request_payload.update(extra_body)
+            request_payload["extra_body"] = extra_body
 
         debug_request_payload = _sanitize_for_debug(copy.deepcopy(request_payload))
 

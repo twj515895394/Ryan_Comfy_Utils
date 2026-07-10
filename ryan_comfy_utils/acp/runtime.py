@@ -104,7 +104,11 @@ def execute_text_session(
     file_inputs: list[str] | None = None,
 ) -> dict:
     session_dir = prepare_workspace(workspace_root, session_id)
-    skill_directory = resolve_skill_directory(skill_root, skill_id)
+    if skill_id == "none":
+        skill_directory = skill_root
+    else:
+        skill_directory = resolve_skill_directory(skill_root, skill_id)
+
     assets = materialize_input_assets(
         session_dir=session_dir,
         image_inputs=image_inputs,
@@ -118,7 +122,10 @@ def execute_text_session(
         file_paths=assets["files"],
         workspace_info={"session_dir": str(session_dir)},
     )
-    rendered_context = render_context_template(context_template, payload)
+    if skill_id == "none":
+        rendered_context = user_text
+    else:
+        rendered_context = render_context_template(context_template, payload)
 
     # 始终落盘 prompt，便于调试与 {context_file} / env 注入（不依赖 command 是否含占位符）
     prompt_path = session_dir / "input" / "prompt.txt"

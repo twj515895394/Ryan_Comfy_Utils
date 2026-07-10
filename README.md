@@ -171,6 +171,7 @@ ACP Profile / CLI 占位符与失败语义见 `docs/agents/acp-runtime-cli-profi
 - `uniform`
 - `interval`
 - `custom_indexes`
+- `scene_first_frames` (分镜首帧模式，配合 `Ryan Video Scene Splitter` 的 `manifest_json` 输入使用)
 
 `custom_indexes` 示例：
 
@@ -182,12 +183,55 @@ ACP Profile / CLI 占位符与失败语义见 `docs/agents/acp-runtime-cli-profi
 
 支持预览输出，也可保存到 ComfyUI 默认 output 目录下的子目录。保存文件会自动加时间戳，避免重复执行时覆盖旧文件。
 
+输入新增：
+- `manifest_json` (分镜元数据，在 `sample_mode` 选择 `scene_first_frames` 时必填)
+
 输出：
 
 - `images`
 - `frame_indexes`
 - `frame_count`
 - `saved_paths_text`
+
+### Ryan Video Scene Splitter
+
+分类：`Ryan Utils / Video`
+
+使用 PySceneDetect (包含自适应检测、内容突变检测、亮度阈值检测) 对视频进行物理/物理重编码切割，并导出结构化的分镜数据。
+
+输入：
+- `video_path`：视频文件绝对路径（提供选择文件对话框按钮及 HTML5 视频播放预览）
+- `output_dir`：切割后分镜的导出子目录（在 ComfyUI `output` 下）
+- `filename_prefix`：导出分镜视频的命名前缀
+- `detector`：检测器类型（"自适应检测"、"内容突变检测"、"亮度阈值检测"）
+- `threshold`：检测灵敏度阈值（0 表示采用检测器内置默认值）
+- `min_scene_len`：最小镜头时长限制（秒）
+- `merge_min_duration`：短片段镜头合并阈值（秒，避免零碎噪音片段）
+- `fast_copy`：快速导出开关（True 时直接进行流复制 `-c copy`，修改宽高/帧率时会自动降级为重编码）
+- **控制参数 (加载时自动读取视频信息)**：
+  - `force_rate`：强制输出分镜帧率（0 表示保持原样，非 0 自动降级为精确重编码）
+  - `custom_width` / `custom_height`：输出分镜视频画面大小（0 表示保持原样）
+  - `frame_load_cap`：最大检测/切割帧数（0 表示全视频分析）
+  - `skip_first_frames`：跳过视频前 X 帧开始分析
+  - `select_every_nth`：采样检测/输出间隔（1 表示全帧，>1 时抽帧切割）
+
+输出：
+- `scene_count`：检测到的分镜总数
+- `manifest_json`：分镜元数据清单（包含每个分镜的开始时间、结束时间、物理路径等，可对接给 `Ryan Video Frame Sampler` 提取各分镜首帧图片）
+- `output_dir`：分镜文件所在的物理文件夹绝对路径
+
+### Ryan Image Batch Splitter
+
+分类：`Ryan Utils / Image`
+
+将输入的批量 Image 批次拆分成最多 12 路独立的单张图片输出，并伴随生成前端临时预览图。
+
+输入：
+- `images`：ComfyUI 批次图像（IMAGE）
+- `output_count`：拆分输出的图像总数（最大支持 12）
+
+输出：
+- `image_01` 到 `image_12`：各个独立的单张图像（若批次尺寸小于请求拆分数量，多余输出为 `None`）
 
 ## 安装
 

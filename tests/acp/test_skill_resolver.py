@@ -54,6 +54,17 @@ class TestSkillResolver(unittest.TestCase):
         binding = resolve_skill_binding(manifest, str(self.root), allow_user_skill=False)
         self.assertTrue(binding.skill_dir.is_dir())
 
+    def test_selectable_none_skill(self):
+        manifest = {"skill_id": "my_skill", "mode": "selectable"}
+        binding = resolve_skill_binding(
+            manifest,
+            str(self.root),
+            user_skill_id="none",
+            allow_user_skill=True,
+        )
+        self.assertEqual(binding.skill_id, "none")
+        self.assertEqual(binding.source, "user_input")
+        self.assertEqual(binding.skill_dir, self.root)
 
     def test_selectable_empty_both_raises(self):
         with self.assertRaises(ValueError):

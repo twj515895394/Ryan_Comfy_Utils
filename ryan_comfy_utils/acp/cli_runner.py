@@ -19,6 +19,7 @@ def run_cli_command(
         capture_output=True,
         timeout=timeout_seconds,
         check=False,
+        shell=(os.name == "nt"),
     )
     return {
         "returncode": completed.returncode,

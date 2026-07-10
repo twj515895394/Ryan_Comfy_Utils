@@ -20,9 +20,10 @@ class TestACPContracts(unittest.TestCase):
 
     def test_load_profile_reads_command_and_timeout(self):
         profile = load_profile(
-            Path("ryan_comfy_utils/acp/fixtures/profiles/local_codex.json")
+            Path("ryan_comfy_utils/acp/fixtures/profiles/local_claude_cli.json")
         )
-        self.assertEqual(profile["runner"], "codex_cli")
+        self.assertEqual(profile["runner"], "claude_cli")
+        self.assertIn("claude", profile["command"])
         self.assertGreater(profile["timeout_seconds"], 0)
 
     def test_validate_result_payload_requires_status_and_outputs(self):

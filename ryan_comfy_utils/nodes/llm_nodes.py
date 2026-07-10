@@ -28,6 +28,7 @@ class RyanLLMChat:
                 "top_p": ("FLOAT", {"default": 1.0, "min": 0, "max": 1, "step": 0.01}),
                 "timeout_seconds": ("INT", {"default": 300, "min": 30, "max": 1200, "step": 10}),
                 "retry_count": ("INT", {"default": 0, "min": 0, "max": 3, "step": 1}),
+                "disable_thinking": ("BOOLEAN", {"default": False}),
                 "extra_body_json": ("STRING", {"default": "", "multiline": True}),
             }
         }
@@ -37,7 +38,7 @@ class RyanLLMChat:
     FUNCTION = "run"
     CATEGORY = "Ryan Utils / LLM"
 
-    def run(self, profile, model_override, system_prompt, user_prompt, temperature, max_tokens, top_p, timeout_seconds, retry_count, extra_body_json):
+    def run(self, profile, model_override, system_prompt, user_prompt, temperature, max_tokens, top_p, timeout_seconds, retry_count, disable_thinking, extra_body_json):
         messages = []
         if system_prompt and system_prompt.strip():
             messages.append({"role": "system", "content": system_prompt})
@@ -50,6 +51,7 @@ class RyanLLMChat:
             max_tokens=max_tokens,
             top_p=top_p,
             retry_count=retry_count,
+            disable_thinking=disable_thinking,
             extra_body_json=extra_body_json,
         )
 
@@ -73,6 +75,7 @@ class RyanLLMVisionChat:
                 "image_max_side": ("INT", {"default": 1280, "min": 256, "max": 4096, "step": 64}),
                 "image_format": (["jpeg", "png"], {"default": "jpeg"}),
                 "jpeg_quality": ("INT", {"default": 85, "min": 50, "max": 100, "step": 1}),
+                "disable_thinking": ("BOOLEAN", {"default": False}),
                 "extra_body_json": ("STRING", {"default": "", "multiline": True}),
             },
             "optional": build_image_slot_input_types(include_paths=False),
@@ -98,8 +101,9 @@ class RyanLLMVisionChat:
         image_max_side,
         image_format,
         jpeg_quality,
+        disable_thinking,
         extra_body_json,
-        image_slot_count=1,
+        image_slot_count=2,
         image_01=None,
         image_02=None,
         image_03=None,
@@ -146,5 +150,6 @@ class RyanLLMVisionChat:
             max_tokens=max_tokens,
             top_p=top_p,
             retry_count=retry_count,
+            disable_thinking=disable_thinking,
             extra_body_json=extra_body_json,
         )

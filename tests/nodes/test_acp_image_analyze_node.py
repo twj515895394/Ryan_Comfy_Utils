@@ -19,7 +19,7 @@ class TestACPImageAnalyzeNode(unittest.TestCase):
         self.assertIn("export_to_file", required)
         optional = RyanACPImageAnalyzeAgent.INPUT_TYPES()["optional"]
         self.assertIn("image_01", optional)
-        self.assertIn("image_paths", optional)
+        self.assertNotIn("image_paths", optional)
 
     def test_run_requires_image_paths(self):
         node = RyanACPImageAnalyzeAgent()
@@ -32,7 +32,6 @@ class TestACPImageAnalyzeNode(unittest.TestCase):
                 workspace_root="/tmp",
                 session_id="s",
                 export_to_file=False,
-                image_paths="",
             )
 
     @patch("ryan_comfy_utils.nodes.acp_nodes.export_prompt_to_file")
@@ -42,7 +41,6 @@ class TestACPImageAnalyzeNode(unittest.TestCase):
         export_file.return_value = "/out/x.md"
         node = RyanACPImageAnalyzeAgent()
         node.run(
-            image_paths="/ref.png",
             user_text="detail",
             category="photography",
             output_language="bilingual",
@@ -50,6 +48,7 @@ class TestACPImageAnalyzeNode(unittest.TestCase):
             workspace_root="/tmp",
             session_id="s",
             export_to_file=True,
+            image_01="mock_tensor",
         )
         export_file.assert_called_once()
         kwargs = export_file.call_args.kwargs

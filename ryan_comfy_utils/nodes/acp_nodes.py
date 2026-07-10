@@ -21,7 +21,7 @@ from .comfy_image_inputs import (
 
 
 PACKAGE_ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_PROFILE_PATH = PACKAGE_ROOT / "acp" / "fixtures" / "profiles" / "local_codex.json"
+DEFAULT_PROFILE_PATH = PACKAGE_ROOT / "acp" / "fixtures" / "profiles" / "local_claude_cli.json"
 DEFAULT_MANIFEST_PATH = PACKAGE_ROOT / "acp" / "fixtures" / "manifests" / "universal_agent.json"
 DEFAULT_IMAGE_PROMPT_MANIFEST_PATH = (
     PACKAGE_ROOT / "acp" / "fixtures" / "manifests" / "image_prompt_agent.json"
@@ -185,20 +185,24 @@ def run_fixed_acp_agent(
     )
 
 
+def _list_skills() -> list[str]:
+    skills_dir = PACKAGE_ROOT / "acp" / "fixtures" / "skills"
+    base = ["none"]
+    if not skills_dir.exists() or not skills_dir.is_dir():
+        return base
+    skills = sorted([p.name for p in skills_dir.iterdir() if p.is_dir()])
+    return base + skills
+
+
 class RyanACPUniversalAgent:
     @classmethod
     def INPUT_TYPES(cls):
         return {
             "required": {
-                "skill_id": ("STRING", {"default": ""}),
+                "skill_id": (_list_skills(),),
                 "user_text": ("STRING", {"default": "", "multiline": True}),
-                "profile_path": ("STRING", {"default": str(DEFAULT_PROFILE_PATH)}),
-                "manifest_path": ("STRING", {"default": str(DEFAULT_MANIFEST_PATH)}),
-                "workspace_root": ("STRING", {"default": DEFAULT_WORKSPACE_ROOT}),
-                "session_id": ("STRING", {"default": "session_manual"}),
-                "skill_root": ("STRING", {"default": ""}),
             },
-            "optional": build_image_slot_input_types(include_paths=True),
+            "optional": build_image_slot_input_types(include_paths=False),
         }
 
     RETURN_TYPES = ("STRING", "STRING", "STRING")
@@ -210,13 +214,12 @@ class RyanACPUniversalAgent:
         self,
         skill_id,
         user_text,
-        profile_path,
-        manifest_path,
-        workspace_root,
-        session_id,
-        skill_root,
-        image_slot_count=1,
-        image_paths="",
+        image_slot_count=2,
+        profile_path=str(DEFAULT_PROFILE_PATH),
+        manifest_path=str(DEFAULT_MANIFEST_PATH),
+        workspace_root=DEFAULT_WORKSPACE_ROOT,
+        session_id="session_manual",
+        skill_root="",
         **image_kwargs,
     ):
         manifest = load_manifest(_resolve_path(manifest_path))
@@ -232,7 +235,7 @@ class RyanACPUniversalAgent:
         session_dir = prepare_workspace(workspace, session_id)
         image_inputs = resolve_image_inputs_for_acp(
             session_dir=session_dir,
-            image_paths_text=image_paths,
+            image_paths_text="",
             image_slots=slots,
             parse_paths=parse_multiline_paths,
         )
@@ -260,20 +263,11 @@ class RyanACPImagePromptAgent:
         return {
             "required": {
                 "user_text": ("STRING", {"default": "", "multiline": True}),
-                "profile_path": ("STRING", {"default": str(DEFAULT_PROFILE_PATH)}),
-                "workspace_root": ("STRING", {"default": DEFAULT_WORKSPACE_ROOT}),
-                "session_id": ("STRING", {"default": "session_image_prompt"}),
                 "export_to_file": ("BOOLEAN", {"default": False}),
             },
             "optional": {
-                **build_image_slot_input_types(include_paths=True),
-                "style": ("STRING", {"default": ""}),
-                "subject": ("STRING", {"default": ""}),
-                "scene": ("STRING", {"default": ""}),
-                "extra_prompt": ("STRING", {"default": "", "multiline": True}),
+                **build_image_slot_input_types(include_paths=False),
                 "export_filename": ("STRING", {"default": ""}),
-                "skill_root": ("STRING", {"default": ""}),
-                "manifest_path": ("STRING", {"default": str(DEFAULT_IMAGE_PROMPT_MANIFEST_PATH)}),
             },
         }
 
@@ -285,27 +279,16 @@ class RyanACPImagePromptAgent:
     def run(
         self,
         user_text,
-        profile_path,
-        workspace_root,
-        session_id,
         export_to_file,
-        image_slot_count=1,
-        image_paths="",
-        style="",
-        subject="",
-        scene="",
-        extra_prompt="",
+        image_slot_count=2,
         export_filename="",
+        profile_path=str(DEFAULT_PROFILE_PATH),
+        workspace_root=DEFAULT_WORKSPACE_ROOT,
+        session_id="session_image_prompt",
         skill_root="",
         manifest_path=str(DEFAULT_IMAGE_PROMPT_MANIFEST_PATH),
         **image_kwargs,
     ):
-        extra = _format_optional_fields(
-            style=style,
-            subject=subject,
-            scene=scene,
-            extra_prompt=extra_prompt,
-        )
         slots = _collect_run_image_slots(image_slot_count, **image_kwargs)
         response_text, session_dir, raw_json = run_fixed_acp_agent(
             manifest_path=manifest_path,
@@ -314,8 +297,8 @@ class RyanACPImagePromptAgent:
             session_id=session_id,
             skill_root=skill_root,
             user_text=user_text,
-            image_paths=image_paths,
-            extra_user_lines=extra,
+            image_paths="",
+            extra_user_lines="",
             image_slots=slots,
         )
         _maybe_export_prompt(
@@ -335,18 +318,11 @@ class RyanACPVideoPromptAgent:
         return {
             "required": {
                 "user_text": ("STRING", {"default": "", "multiline": True}),
-                "profile_path": ("STRING", {"default": str(DEFAULT_PROFILE_PATH)}),
-                "workspace_root": ("STRING", {"default": DEFAULT_WORKSPACE_ROOT}),
-                "session_id": ("STRING", {"default": "session_video_prompt"}),
                 "export_to_file": ("BOOLEAN", {"default": False}),
             },
             "optional": {
-                **build_image_slot_input_types(include_paths=True),
-                "task": ("STRING", {"default": "", "multiline": True}),
-                "extra_prompt": ("STRING", {"default": "", "multiline": True}),
+                **build_image_slot_input_types(include_paths=False),
                 "export_filename": ("STRING", {"default": ""}),
-                "skill_root": ("STRING", {"default": ""}),
-                "manifest_path": ("STRING", {"default": str(DEFAULT_VIDEO_PROMPT_MANIFEST_PATH)}),
             },
         }
 
@@ -358,20 +334,16 @@ class RyanACPVideoPromptAgent:
     def run(
         self,
         user_text,
-        profile_path,
-        workspace_root,
-        session_id,
         export_to_file,
-        image_slot_count=1,
-        image_paths="",
-        task="",
-        extra_prompt="",
+        image_slot_count=2,
         export_filename="",
+        profile_path=str(DEFAULT_PROFILE_PATH),
+        workspace_root=DEFAULT_WORKSPACE_ROOT,
+        session_id="session_video_prompt",
         skill_root="",
         manifest_path=str(DEFAULT_VIDEO_PROMPT_MANIFEST_PATH),
         **image_kwargs,
     ):
-        extra = _format_optional_fields(task=task, extra_prompt=extra_prompt)
         slots = _collect_run_image_slots(image_slot_count, **image_kwargs)
         response_text, session_dir, raw_json = run_fixed_acp_agent(
             manifest_path=manifest_path,
@@ -380,8 +352,8 @@ class RyanACPVideoPromptAgent:
             session_id=session_id,
             skill_root=skill_root,
             user_text=user_text,
-            image_paths=image_paths,
-            extra_user_lines=extra,
+            image_paths="",
+            extra_user_lines="",
             image_slots=slots,
         )
         _maybe_export_prompt(
@@ -403,17 +375,11 @@ class RyanACPImageAnalyzeAgent:
                 "user_text": ("STRING", {"default": "", "multiline": True}),
                 "category": (list(IMAGE_REVERSE_CATEGORIES), {"default": "general"}),
                 "output_language": (list(OUTPUT_LANGUAGE_OPTIONS), {"default": "bilingual"}),
-                "profile_path": ("STRING", {"default": str(DEFAULT_PROFILE_PATH)}),
-                "workspace_root": ("STRING", {"default": DEFAULT_WORKSPACE_ROOT}),
-                "session_id": ("STRING", {"default": "session_image_analyze"}),
                 "export_to_file": ("BOOLEAN", {"default": False}),
             },
             "optional": {
-                **build_image_slot_input_types(include_paths=True),
-                "extra_prompt": ("STRING", {"default": "", "multiline": True}),
+                **build_image_slot_input_types(include_paths=False),
                 "export_filename": ("STRING", {"default": ""}),
-                "skill_root": ("STRING", {"default": ""}),
-                "manifest_path": ("STRING", {"default": str(DEFAULT_IMAGE_ANALYZE_MANIFEST_PATH)}),
             },
         }
 
@@ -427,24 +393,21 @@ class RyanACPImageAnalyzeAgent:
         user_text,
         category,
         output_language,
-        profile_path,
-        workspace_root,
-        session_id,
         export_to_file,
-        image_slot_count=1,
-        image_paths="",
-        extra_prompt="",
+        image_slot_count=2,
         export_filename="",
+        profile_path=str(DEFAULT_PROFILE_PATH),
+        workspace_root=DEFAULT_WORKSPACE_ROOT,
+        session_id="session_image_analyze",
         skill_root="",
         manifest_path=str(DEFAULT_IMAGE_ANALYZE_MANIFEST_PATH),
         **image_kwargs,
     ):
         slots = _collect_run_image_slots(image_slot_count, **image_kwargs)
-        _require_image_paths_or_slots(image_paths, slots)
+        _require_image_paths_or_slots("", slots)
         extra = _format_optional_fields(
             category=category,
             output_language=output_language,
-            extra_prompt=extra_prompt,
         )
         response_text, session_dir, raw_json = run_fixed_acp_agent(
             manifest_path=manifest_path,
@@ -453,7 +416,7 @@ class RyanACPImageAnalyzeAgent:
             session_id=session_id,
             skill_root=skill_root,
             user_text=user_text,
-            image_paths=image_paths,
+            image_paths="",
             extra_user_lines=extra,
             image_slots=slots,
         )

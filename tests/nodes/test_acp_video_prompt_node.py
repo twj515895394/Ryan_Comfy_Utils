@@ -12,8 +12,8 @@ class TestACPVideoPromptNode(unittest.TestCase):
         node = RyanACPVideoPromptAgent()
         self.assertEqual(node.RETURN_NAMES, ("response_text", "session_dir", "raw_result_json"))
         optional = RyanACPVideoPromptAgent.INPUT_TYPES()["optional"]
-        self.assertIn("task", optional)
-        self.assertIn("image_paths", optional)
+        self.assertIn("image_01", optional)
+        self.assertNotIn("image_paths", optional)
         required = RyanACPVideoPromptAgent.INPUT_TYPES()["required"]
         self.assertIn("export_to_file", required)
 
@@ -27,16 +27,11 @@ class TestACPVideoPromptNode(unittest.TestCase):
             workspace_root="/tmp/w",
             session_id="s2",
             export_to_file=False,
-            image_paths="",
-            task="5s clip",
-            extra_prompt="",
-            skill_root="",
             manifest_path=str(DEFAULT_VIDEO_PROMPT_MANIFEST_PATH),
         )
         self.assertEqual(out[0], "video prompt")
         kwargs = run_fixed.call_args.kwargs
         self.assertEqual(kwargs["image_paths"], "")
-        self.assertIn("5s clip", kwargs["extra_user_lines"])
 
 
 if __name__ == "__main__":

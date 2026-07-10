@@ -20,6 +20,7 @@ class TestComfyImageInputs(unittest.TestCase):
     def test_build_defaults_one_visible_slot(self):
         optional = build_image_slot_input_types()
         self.assertIn("image_01", optional)
+        self.assertIn("image_02", optional)
         self.assertIn("image_10", optional)
         self.assertIn("image_slot_count", optional)
 

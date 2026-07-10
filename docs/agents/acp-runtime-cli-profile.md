@@ -4,7 +4,7 @@
 
 | 字段 | 说明 |
 |------|------|
-| `runner` | 运行器标识（如 `codex_cli`） |
+| `runner` | 运行器标识（如 `claude_cli`、`codex_cli`） |
 | `command` | argv 列表；支持占位符，**不经 shell** |
 | `workspace_root` | 默认 workspace；节点 `workspace_root` 非空时优先 |
 | `timeout_seconds` | CLI 超时秒数 |
@@ -38,7 +38,27 @@ Runtime 在调用前将 `rendered_context` 写入 `session_dir/input/prompt.txt`
 2. 否则 profile.`workspace_root`  
 3. 否则 `output/acp_workspace`
 
-## 示例
+## 默认 Profile
+
+ACP 节点内置默认路径：`acp/fixtures/profiles/local_claude_cli.json`（本机 **Claude Code CLI**：`claude -p "{context}"`）。需已安装并登录 `claude` 命令。
+
+可选保留 `local_codex.json`（`codex exec`）。节点参数 `profile_path` 可指向任意符合本约定的 JSON。
+
+## 示例（Claude CLI，默认）
+
+```json
+{
+  "runner": "claude_cli",
+  "command": ["claude", "-p", "{context}"],
+  "workspace_root": "output/acp_workspace",
+  "timeout_seconds": 300,
+  "environment": {}
+}
+```
+
+长提示词可改用 `["claude", "-p", "--", "{context_file}"]` 或仅 `["claude", "-p", "{context_file}"]`（以本机 `claude --help` 为准）。
+
+## 示例（Codex CLI，可选）
 
 ```json
 {
@@ -50,4 +70,4 @@ Runtime 在调用前将 `rendered_context` 写入 `session_dir/input/prompt.txt`
 }
 ```
 
-真实 Claude/Codex 参数以联调为准；占位符机制固定。失败语义见固定 Agent 契约文档。
+CLI 具体参数以本机版本联调为准；占位符机制固定。失败语义见固定 Agent 契约文档。

@@ -40,7 +40,11 @@ def resolve_skill_binding(
         mode = "fixed" if not allow_user_skill else "selectable"
 
     root = resolve_skill_root(skill_root_text)
-    skill_dir = resolve_skill_directory(root, skill_id)
+    if skill_id == "none":
+        skill_dir = root
+    else:
+        skill_dir = resolve_skill_directory(root, skill_id)
+        
     return SkillBinding(
         skill_id=skill_id,
         skill_root=root,

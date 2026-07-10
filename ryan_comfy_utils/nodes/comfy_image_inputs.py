@@ -20,9 +20,9 @@ def image_slot_name(index: int) -> str:
 def build_image_slot_input_types(
     *,
     include_paths: bool = False,
-    default_slot_count: int = 1,
+    default_slot_count: int = 2,
 ) -> dict[str, tuple]:
-    """默认仅暴露 image_01；其余槽位由前端「+」动态添加。"""
+    """默认暴露 image_01、image_02；其余槽位通过前端 Update 按钮刷新。"""
     optional: dict[str, tuple] = {
         image_slot_name(1): ("IMAGE",),
         "image_slot_count": (
@@ -32,6 +32,7 @@ def build_image_slot_input_types(
     }
     for i in range(2, MAX_RYAN_IMAGE_SLOTS + 1):
         optional[image_slot_name(i)] = ("IMAGE",)
+
     if include_paths:
         optional["image_paths"] = ("STRING", {"default": "", "multiline": True})
     return optional

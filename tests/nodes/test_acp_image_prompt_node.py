@@ -15,8 +15,8 @@ class TestACPImagePromptNode(unittest.TestCase):
         self.assertIn("user_text", required)
         self.assertIn("export_to_file", required)
         optional = RyanACPImagePromptAgent.INPUT_TYPES()["optional"]
-        self.assertIn("image_paths", optional)
-        self.assertIn("style", optional)
+        self.assertIn("image_01", optional)
+        self.assertNotIn("image_paths", optional)
 
     @patch("ryan_comfy_utils.nodes.acp_nodes.run_fixed_acp_agent")
     def test_run_forwards_to_fixed_runner(self, run_fixed):
@@ -28,19 +28,12 @@ class TestACPImagePromptNode(unittest.TestCase):
             workspace_root="/tmp/w",
             session_id="s1",
             export_to_file=False,
-            image_paths="/a.png",
-            style="cyberpunk",
-            subject="",
-            scene="",
-            extra_prompt="",
-            skill_root="",
             manifest_path=str(DEFAULT_IMAGE_PROMPT_MANIFEST_PATH),
         )
         self.assertEqual(out[0], "img prompt")
         run_fixed.assert_called_once()
         kwargs = run_fixed.call_args.kwargs
-        self.assertIn("cyberpunk", kwargs["extra_user_lines"])
-        self.assertEqual(kwargs["image_paths"], "/a.png")
+        self.assertEqual(kwargs["image_paths"], "")
 
     @patch("ryan_comfy_utils.nodes.acp_nodes._maybe_export_prompt")
     @patch("ryan_comfy_utils.nodes.acp_nodes.run_fixed_acp_agent")

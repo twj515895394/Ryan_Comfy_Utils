@@ -1,6 +1,3 @@
-import json
-import os
-import re
 from pathlib import Path
 
 PROMPTS_DIR = Path(__file__).resolve().parents[1] / "prompts"
@@ -22,18 +19,11 @@ def _read_template(source, prompt_dir, template_name):
     return path.read_text(encoding="utf-8")
 
 
-def _replace_variables(text, variables_json):
-    variables = {}
-    if variables_json and variables_json.strip():
-        variables = json.loads(variables_json)
-        if not isinstance(variables, dict):
-            raise ValueError("variables_json must be a JSON object")
 
-    def repl(match):
-        key = match.group(1).strip()
-        return str(variables.get(key, match.group(0)))
-
-    return re.sub(r"\{\{\s*([^}]+?)\s*\}\}", repl, text)
+TEMPLATE_SOURCE_MAP = {
+    "内置模板": "built_in",
+    "自定义目录": "custom_dir",
+}
 
 
 class RyanPromptTemplate:
@@ -42,10 +32,9 @@ class RyanPromptTemplate:
         templates = _list_templates("built_in", "")
         return {
             "required": {
-                "template_source": (["built_in", "custom_dir"], {"default": "built_in"}),
+                "template_source": (["内置模板", "自定义目录"], {"default": "内置模板"}),
                 "prompt_dir": ("STRING", {"default": ""}),
                 "template_name": (templates,),
-                "variables_json": ("STRING", {"default": "{}", "multiline": True}),
                 "user_prompt": ("STRING", {"default": "", "multiline": True}),
                 "append_user_prompt": ("BOOLEAN", {"default": True}),
             }
@@ -56,9 +45,10 @@ class RyanPromptTemplate:
     FUNCTION = "run"
     CATEGORY = "Ryan Utils / Prompt"
 
-    def run(self, template_source, prompt_dir, template_name, variables_json, user_prompt, append_user_prompt):
-        template_text = _read_template(template_source, prompt_dir, template_name)
-        final_prompt = _replace_variables(template_text, variables_json)
+    def run(self, template_source, prompt_dir, template_name, user_prompt, append_user_prompt):
+        source = TEMPLATE_SOURCE_MAP.get(template_source, "built_in")
+        template_text = _read_template(source, prompt_dir, template_name)
+        final_prompt = template_text
         if append_user_prompt and user_prompt and user_prompt.strip():
             final_prompt = final_prompt.rstrip() + "\n\n" + user_prompt.strip()
         return (final_prompt, template_text)

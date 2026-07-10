@@ -7,7 +7,7 @@ from .ryan_comfy_utils.nodes.acp_nodes import (
 )
 from .ryan_comfy_utils.nodes.file_nodes import RyanFileExporter
 from .ryan_comfy_utils.nodes.prompt_nodes import RyanPromptTemplate
-from .ryan_comfy_utils.nodes.video_nodes import RyanBatchVideoLoader, RyanVideoFrameSampler
+from .ryan_comfy_utils.nodes.video_nodes import RyanBatchVideoLoader, RyanVideoFrameSampler, RyanImageBatchSplitter, RyanVideoSceneSplitter
 
 WEB_DIRECTORY = "./ryan_comfy_utils/web"
 
@@ -21,6 +21,8 @@ NODE_CLASS_MAPPINGS = {
     "Ryan Prompt Template": RyanPromptTemplate,
     "Ryan Batch Video Loader": RyanBatchVideoLoader,
     "Ryan Video Frame Sampler": RyanVideoFrameSampler,
+    "Ryan Image Batch Splitter": RyanImageBatchSplitter,
+    "Ryan Video Scene Splitter": RyanVideoSceneSplitter,
     "Ryan File Exporter": RyanFileExporter,
 }
 
@@ -34,7 +36,18 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "Ryan Prompt Template": "Ryan Prompt Template",
     "Ryan Batch Video Loader": "Ryan Batch Video Loader",
     "Ryan Video Frame Sampler": "Ryan Video Frame Sampler",
+    "Ryan Image Batch Splitter": "Ryan Image Batch Splitter",
+    "Ryan Video Scene Splitter": "Ryan Video Scene Splitter",
     "Ryan File Exporter": "Ryan File Exporter",
 }
 
 __all__ = ["NODE_CLASS_MAPPINGS", "NODE_DISPLAY_NAME_MAPPINGS", "WEB_DIRECTORY"]
+
+# === 节点加载醒目提示（便于确认是否成功加载）===
+print("\n" + "=" * 60)
+print("🚀 Ryan_Comfy_Utils 自定义节点包加载完成")
+print("-" * 60)
+for node_id in sorted(NODE_CLASS_MAPPINGS.keys()):
+    display_name = NODE_DISPLAY_NAME_MAPPINGS.get(node_id, node_id)
+    print(f"  ✓ {display_name}")
+print("=" * 60 + "\n")
