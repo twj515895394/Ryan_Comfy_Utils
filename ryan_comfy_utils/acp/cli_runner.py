@@ -8,6 +8,7 @@ def run_cli_command(
     cwd: Path,
     timeout_seconds: int,
     env_overrides: dict,
+    stdin_text: str | None = None,
 ) -> dict:
     env = os.environ.copy()
     env.update(env_overrides)
@@ -20,7 +21,7 @@ def run_cli_command(
         timeout=timeout_seconds,
         check=False,
         shell=(os.name == "nt"),
-        stdin=subprocess.DEVNULL,
+        input=stdin_text if stdin_text is not None else "",
     )
     return {
         "returncode": completed.returncode,

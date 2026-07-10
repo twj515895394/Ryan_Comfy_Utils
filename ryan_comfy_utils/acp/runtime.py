@@ -141,13 +141,16 @@ def execute_text_session(
         context_payload={"rendered_context": rendered_context, **payload},
     )
 
+    # Filter out "{context}" from the command line arguments list to avoid Windows CLI length limits
+    # and newline truncation. Instead, we always pass the context securely via stdin.
+    cmd_template = [arg for arg in runner_profile["command"] if arg != "{context}"]
+
     replacements = {
         "{context_file}": prompt_abs,
-        "{context}": rendered_context,
         "{session_dir}": session_abs,
         "{skill_directory}": skill_abs,
     }
-    command = expand_cli_command(runner_profile["command"], replacements)
+    command = expand_cli_command(cmd_template, replacements)
 
     env_overrides = dict(runner_profile.get("environment") or {})
     env_overrides.setdefault("RYAN_ACP_CONTEXT_FILE", prompt_abs)
@@ -160,6 +163,7 @@ def execute_text_session(
             cwd=session_dir,
             timeout_seconds=timeout_seconds,
             env_overrides=env_overrides,
+            stdin_text=rendered_context,
         )
     except subprocess.TimeoutExpired as exc:
         raise RuntimeError(
