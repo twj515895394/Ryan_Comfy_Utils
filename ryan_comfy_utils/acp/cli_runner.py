@@ -22,6 +22,7 @@ def run_cli_command(
         check=False,
         shell=(os.name == "nt"),
         input=stdin_text if stdin_text is not None else "",
+        encoding="utf-8",
     )
     return {
         "returncode": completed.returncode,

@@ -145,6 +145,17 @@ def execute_text_session(
     # and newline truncation. Instead, we always pass the context securely via stdin.
     cmd_template = [arg for arg in runner_profile["command"] if arg != "{context}"]
 
+    # If the CLI tool is claude, dynamically inject --permission-mode bypassPermissions
+    # to prevent interactive prompts from hanging on EOF stdin.
+    is_claude = False
+    for arg in cmd_template[:3]:
+        if "claude" in str(arg).lower():
+            is_claude = True
+            break
+    if is_claude and "--permission-mode" not in cmd_template:
+        cmd_template.append("--permission-mode")
+        cmd_template.append("bypassPermissions")
+
     replacements = {
         "{context_file}": prompt_abs,
         "{session_dir}": session_abs,
