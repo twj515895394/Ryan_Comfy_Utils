@@ -17,7 +17,7 @@ class TestFixedPromptManifests(unittest.TestCase):
         manifest = load_manifest(DEFAULT_IMAGE_PROMPT_MANIFEST_PATH)
         self.assertEqual(manifest["node_id"], "ryan.acp.image_prompt_agent")
         self.assertEqual(manifest["mode"], "fixed")
-        self.assertEqual(manifest["skill_id"], "image_prompt_generator")
+        self.assertEqual(manifest["skill_id"], "image-prompt-skill")
         self.assertTrue(manifest["input_contract"]["text"])
         self.assertTrue(manifest["input_contract"]["images"])
 
@@ -25,17 +25,17 @@ class TestFixedPromptManifests(unittest.TestCase):
         manifest = load_manifest(DEFAULT_VIDEO_PROMPT_MANIFEST_PATH)
         self.assertEqual(manifest["node_id"], "ryan.acp.video_prompt_agent")
         self.assertEqual(manifest["mode"], "fixed")
-        self.assertEqual(manifest["skill_id"], "video_prompt_generator")
+        self.assertEqual(manifest["skill_id"], "video-prompt-skill")
 
     def test_resolve_skill_root_falls_back_to_package_fixtures(self):
         root = resolve_skill_root("")
         self.assertEqual(root, PACKAGE_ROOT / "acp" / "fixtures" / "skills")
-        self.assertTrue((root / "image_prompt_generator").is_dir())
-        self.assertTrue((root / "video_prompt_generator").is_dir())
+        self.assertTrue((root / "image-prompt-skill").is_dir())
+        self.assertTrue((root / "video-prompt-skill").is_dir())
 
     def test_resolve_skill_directory_under_default_root(self):
         skill_root = resolve_skill_root("")
-        path = resolve_skill_directory(skill_root, "image_prompt_generator")
+        path = resolve_skill_directory(skill_root, "image-prompt-skill")
         self.assertTrue((path / "SKILL.md").is_file())
 
     def test_parse_multiline_paths_strips_empty_lines(self):
@@ -66,7 +66,7 @@ class TestFixedPromptManifests(unittest.TestCase):
             self.assertEqual(response_text, "prompt out")
             self.assertEqual(session_dir, "/tmp/s1")
             call_kw = execute.call_args.kwargs
-            self.assertEqual(call_kw["skill_id"], "image_prompt_generator")
+            self.assertEqual(call_kw["skill_id"], "image-prompt-skill")
             self.assertEqual(call_kw["image_inputs"], ["ref.png"])
 
 

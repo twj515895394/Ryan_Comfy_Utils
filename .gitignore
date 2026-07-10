@@ -12,3 +12,7 @@ ryan_comfy_utils/config/llm_profiles.json
 # local outputs / temp
 outputs/
 temp/
+
+# external skills
+ryan_comfy_utils/acp/fixtures/skills/image-prompt-skill/
+ryan_comfy_utils/acp/fixtures/skills/video-prompt-skill/

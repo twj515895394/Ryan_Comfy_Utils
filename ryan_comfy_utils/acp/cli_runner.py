@@ -20,6 +20,7 @@ def run_cli_command(
         timeout=timeout_seconds,
         check=False,
         shell=(os.name == "nt"),
+        stdin=subprocess.DEVNULL,
     )
     return {
         "returncode": completed.returncode,

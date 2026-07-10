@@ -1,8 +1,8 @@
 {
   "node_id": "ryan.acp.image_prompt_agent",
-  "skill_id": "image_prompt_generator",
+  "skill_id": "image-prompt-skill",
   "mode": "fixed",
-  "context_template": "读取 Skill:\n{skill_directory}\n\n用户输入:\n{input.text}\n\n参考图路径:\n{input.images}\n",
+  "context_template": "读取 Skill 规则与模板目录:\n{skill_directory}\n\n请使用快速模式直接运行此 Skill。直接且仅返回生成的最终生图提示词内容，绝对不要包含任何对话性的前言、解释、分析说明或 Markdown 代码包裹。\n\n用户输入:\n{input.text}\n\n参考图路径:\n{input.images}\n",
   "input_contract": {
     "text": true,
     "images": true,

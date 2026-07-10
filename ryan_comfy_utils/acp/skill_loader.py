@@ -11,7 +11,7 @@ def resolve_skill_root(skill_root_text: str) -> Path:
     text = (skill_root_text or "").strip()
     if not text:
         return _DEFAULT_FIXTURES_SKILLS
-    return Path(text).expanduser()
+    return Path(text).expanduser().absolute()
 
 
 def resolve_skill_directory(skill_root: Path, skill_id: str) -> Path:
