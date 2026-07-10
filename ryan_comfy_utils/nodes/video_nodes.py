@@ -128,6 +128,9 @@ if hasattr(PromptServer, "instance") and PromptServer.instance:
         return web.json_response({"path": selected})
 
 
+_LAST_LOADED_VIDEO_PATH = None
+
+
 class RyanBatchVideoLoader:
     @classmethod
     def INPUT_TYPES(cls):
@@ -163,6 +166,10 @@ class RyanBatchVideoLoader:
 
         actual_index = clamp_index(index, total)
         selected = files[actual_index]
+
+        global _LAST_LOADED_VIDEO_PATH
+        _LAST_LOADED_VIDEO_PATH = str(selected.resolve())
+
         images, frame_count = load_video_frames(
             str(selected),
             backend_mode=backend_mode,
@@ -253,8 +260,16 @@ class RyanVideoFrameSampler:
         real_save_mode = SAVE_MODE_MAP.get(save_mode, "preview_only")
         
         if real_sample_mode == "scene_first_frame":
+            # If video_path is empty or missing, fallback to the last successfully loaded video path
+            if not video_path:
+                global _LAST_LOADED_VIDEO_PATH
+                if _LAST_LOADED_VIDEO_PATH and Path(_LAST_LOADED_VIDEO_PATH).exists():
+                    video_path = _LAST_LOADED_VIDEO_PATH
+
             if not video_path or not Path(video_path).exists():
-                raise FileNotFoundError(f"分镜采样模式需要有效的视频文件路径，当前路径不存在: {video_path}")
+                raise FileNotFoundError(
+                    f"分镜采样模式需要有效的视频文件路径。请将视频加载器（如 Ryan Batch Video Loader）的 video_path 输出连接到采样器的 video_path 输入，或者确保视频加载器已成功运行过。当前路径不存在或为空: {video_path}"
+                )
             
             real_detector = DETECTOR_MAP.get(scene_detector, "adaptive")
             real_threshold = scene_threshold if scene_threshold > 0 else None
@@ -419,6 +434,10 @@ class RyanVideoSceneSplitter:
 
         if not video_path or not Path(video_path).exists():
             raise FileNotFoundError(f"视频文件不存在: {video_path}")
+
+        # Save to global cache for video frame sampler fallback
+        global _LAST_LOADED_VIDEO_PATH
+        _LAST_LOADED_VIDEO_PATH = str(Path(video_path).resolve())
 
         real_detector = DETECTOR_MAP.get(detector, "adaptive")
         real_threshold = threshold if threshold > 0 else None
