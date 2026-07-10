@@ -2,7 +2,7 @@
   "node_id": "ryan.acp.video_prompt_agent",
   "skill_id": "video-prompt-skill",
   "mode": "fixed",
-  "context_template": "读取 Skill 规则与模板目录:\n{skill_directory}\n\n请使用快速模式直接运行此 Skill。直接且仅返回生成的最终视频提示词内容，绝对不要包含任何对话性的前言、解释、分析说明或 Markdown 代码包裹。\n\n用户输入:\n{input.text}\n\n关键帧路径:\n{input.images}\n",
+  "context_template": "系统已将目标 Skill 目录配置为: {skill_directory}\n请优先通过工具读取并学习其中的 SKILL.md 以及相关规则文件，然后严格按照其中的规则执行以下用户任务。\n\n请使用快速模式直接运行此 Skill。直接且仅返回生成的最终视频提示词内容，绝对不要包含任何对话性的前言、解释、分析说明或 Markdown 代码包裹。\n\n用户输入:\n{input.text}\n\n关键帧路径:\n{input.images}\n",
   "input_contract": {
     "text": true,
     "images": true,
