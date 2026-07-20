@@ -25,7 +25,11 @@ DEFAULT_MODEL_ROOT = Path(folder_paths.models_dir) / MODEL_FOLDER_NAME
 MODEL_NONE = "[no local multimodal model found]"
 MMPROJ_AUTO = "auto"
 
-folder_paths.add_model_folder_path(MODEL_FOLDER_NAME, str(DEFAULT_MODEL_ROOT), is_default=True)
+try:
+    folder_paths.add_model_folder_path(MODEL_FOLDER_NAME, str(DEFAULT_MODEL_ROOT), is_default=True)
+except TypeError:
+    # Compatibility with older ComfyUI versions without the is_default argument.
+    folder_paths.add_model_folder_path(MODEL_FOLDER_NAME, str(DEFAULT_MODEL_ROOT))
 
 
 def _model_roots() -> list[Path]:
@@ -443,6 +447,7 @@ class LocalMultimodalRuntime:
         keep_model_loaded: bool,
     ) -> tuple[str, dict[str, Any]]:
         with self._lock:
+            model = processor = inputs = generated = trimmed = None
             load_seconds = 0.0
             started = time.perf_counter()
             try:
@@ -504,6 +509,9 @@ class LocalMultimodalRuntime:
                 return text, info
             finally:
                 if not keep_model_loaded:
+                    # Drop local references before GC / empty_cache; otherwise the
+                    # model and generated tensors stay alive until after return.
+                    trimmed = generated = inputs = processor = model = None
                     self.unload_transformers()
 
     def _start_llama_server(
@@ -568,7 +576,11 @@ class LocalMultimodalRuntime:
             popen_kwargs["creationflags"] = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 
         started = time.perf_counter()
-        process = subprocess.Popen(command, **popen_kwargs)
+        try:
+            process = subprocess.Popen(command, **popen_kwargs)
+        except Exception:
+            log_file.close()
+            raise
         _register_process(process)
         session = _LlamaServerSession(signature=signature, process=process, port=port, alias=alias, log_file=log_file)
         self._llama_session = session
@@ -641,7 +653,10 @@ class LocalMultimodalRuntime:
                 }
                 if int(seed) >= 0:
                     request["seed"] = int(seed)
-                response = client.chat.completions.create(**request)
+                try:
+                    response = client.chat.completions.create(**request)
+                finally:
+                    client.close()
                 text = response.choices[0].message.content or ""
                 info = {
                     "backend": "llama_cpp_server",
