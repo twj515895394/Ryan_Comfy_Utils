@@ -1,4 +1,5 @@
 from .ryan_comfy_utils.nodes.llm_nodes import RyanLLMChat, RyanLLMVisionChat
+from .ryan_comfy_utils.nodes.local_multimodal_nodes import RyanLocalMultimodalChat
 from .ryan_comfy_utils.nodes.acp_nodes import (
     RyanACPImageAnalyzeAgent,
     RyanACPImagePromptAgent,
@@ -18,6 +19,7 @@ NODE_CLASS_MAPPINGS = {
     "Ryan ACP Video Prompt Agent": RyanACPVideoPromptAgent,
     "Ryan LLM Chat": RyanLLMChat,
     "Ryan LLM Vision Chat": RyanLLMVisionChat,
+    "Ryan Local Multimodal Chat": RyanLocalMultimodalChat,
     "Ryan Prompt Template": RyanPromptTemplate,
     "Ryan Batch Video Loader": RyanBatchVideoLoader,
     "Ryan Video Frame Sampler": RyanVideoFrameSampler,
@@ -33,6 +35,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "Ryan ACP Video Prompt Agent": "Ryan Video Prompt Agent",
     "Ryan LLM Chat": "Ryan LLM Chat",
     "Ryan LLM Vision Chat": "Ryan LLM Vision Chat",
+    "Ryan Local Multimodal Chat": "Ryan Local Multimodal Chat",
     "Ryan Prompt Template": "Ryan Prompt Template",
     "Ryan Batch Video Loader": "Ryan Batch Video Loader",
     "Ryan Video Frame Sampler": "Ryan Video Frame Sampler",
