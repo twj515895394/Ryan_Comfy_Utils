@@ -4,6 +4,7 @@ Ryan Comfy Utils 是一个自用型 ComfyUI 工具节点集合，重点面向：
 
 - **ACP Runtime**：通过固定 Agent 节点调用本地 Claude/Codex CLI（Skill 与 Node 解耦）
 - OpenAI-Compatible LLM / Vision 调用
+- 本地多模态模型调用（Transformers 或 GGUF + mmproj）
 - Prompt 模板管理与文件导出
 - 批量目录视频加载与基础抽帧控制
 - 视频帧首尾帧 / 均匀采样
@@ -105,6 +106,19 @@ ACP Profile / CLI 占位符与失败语义见 `docs/agents/acp-runtime-cli-profi
 - 默认 `jpeg`，`jpeg_quality = 85`
 - 可切换 `png`
 - `request_json` 中的 base64 图片会被截断展示，真实请求仍发送完整图片
+
+### Ryan Local Multimodal Chat
+
+分类：`Ryan Utils / LLM`
+
+通用本地图片理解/多图对话节点，支持两种后端：
+
+- Transformers 本地模型目录：通过 `AutoModelForImageTextToText + AutoProcessor` 动态加载。
+- GGUF 主模型 + mmproj：临时启动官方 `llama-server`，通过本机 OpenAI-compatible 接口推理。
+
+模型默认放在 `ComfyUI/models/ryan_multimodal/`。节点会把包含 `config.json` 的目录列为 `HF | ...`，把普通 `.gguf` 列为 `GGUF | ...`，并自动识别常见 mmproj/projector 文件。
+
+`keep_model_loaded=false`（默认）时，每次执行结束或异常都会清理模型；GGUF 后端会直接终止临时 `llama-server` 子进程。详细安装、目录布局、参数和限制见 `docs/llm/local-multimodal-node.md`。
 
 ### Ryan Prompt Template
 
@@ -244,6 +258,14 @@ cd Ryan_Comfy_Utils
 pip install -r requirements.txt
 ```
 
+本地 Transformers 多模态后端使用额外依赖：
+
+```bash
+pip install -r requirements-local-multimodal.txt
+```
+
+GGUF + mmproj 后端需要单独安装较新的官方 `llama-server`，不需要安装 `llama-cpp-python`。
+
 ## LLM Profile 配置
 
 复制示例配置：
@@ -273,8 +295,10 @@ export RYAN_COMFY_UTILS_PROFILE_PATH="/your/path/llm_profiles.json"
 
 ## 设计原则
 
-- 不内置本地 Qwen / transformers 模型加载逻辑
-- 第一版统一走 OpenAI-Compatible 协议
-- LLM 请求不做流式输出，适配 ComfyUI blocking 执行模式
-- LLM 请求失败直接抛异常，中断 workflow，方便定位问题
-- 视频能力参考 VideoHelperSuite，但不强依赖它
+- 远程模型统一走 OpenAI-Compatible 协议。
+- 本地多模态模型使用可选后端，不把 Qwen 或某个具体模型类写死在节点协议中。
+- GGUF 多模态优先调用官方 `llama-server + mmproj`，避免依赖特定 `llama-cpp-python` Vision Handler。
+- 默认按次加载并在执行结束后卸载；需要连续推理时可显式开启常驻。
+- LLM 请求不做流式输出，适配 ComfyUI blocking 执行模式。
+- LLM 请求失败直接抛异常，中断 workflow，方便定位问题。
+- 视频能力参考 VideoHelperSuite，但不强依赖它。
