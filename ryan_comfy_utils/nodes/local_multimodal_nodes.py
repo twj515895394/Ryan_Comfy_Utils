@@ -12,6 +12,22 @@ from ..core.local_multimodal_runtime import (
 from .comfy_image_inputs import build_image_slot_input_types, flatten_slot_tensors_to_pil, slots_from_explicit_args
 
 
+def _release_comfy_models(enabled: bool) -> None:
+    if not enabled:
+        return
+    try:
+        import comfy.model_management as model_management
+
+        unload = getattr(model_management, "unload_all_models", None)
+        if callable(unload):
+            unload()
+        empty_cache = getattr(model_management, "soft_empty_cache", None)
+        if callable(empty_cache):
+            empty_cache()
+    except Exception as exc:
+        print(f"[Ryan Local Multimodal] Unable to release ComfyUI models before load: {exc}")
+
+
 class RyanLocalMultimodalChat:
     def __init__(self):
         self.runtime = LocalMultimodalRuntime()
@@ -28,6 +44,7 @@ class RyanLocalMultimodalChat:
                 "system_prompt": ("STRING", {"default": "", "multiline": True}),
                 "user_prompt": ("STRING", {"default": "Describe the image in detail.", "multiline": True}),
                 "keep_model_loaded": ("BOOLEAN", {"default": False}),
+                "unload_comfy_models_before_load": ("BOOLEAN", {"default": True}),
                 "max_images": ("INT", {"default": 10, "min": 1, "max": 10, "step": 1}),
                 "image_max_side": ("INT", {"default": 1536, "min": 0, "max": 8192, "step": 64}),
                 "temperature": ("FLOAT", {"default": 0.2, "min": 0.0, "max": 2.0, "step": 0.01}),
@@ -64,6 +81,7 @@ class RyanLocalMultimodalChat:
         system_prompt,
         user_prompt,
         keep_model_loaded,
+        unload_comfy_models_before_load,
         max_images,
         image_max_side,
         temperature,
@@ -119,6 +137,7 @@ class RyanLocalMultimodalChat:
         )
         images = flatten_slot_tensors_to_pil(slots, max_total=int(max_images or 10))
         images = [resize_max_side(image, int(image_max_side)) for image in images]
+        _release_comfy_models(bool(unload_comfy_models_before_load))
 
         if requested_backend == "transformers":
             text, info = self.runtime.run_transformers(
