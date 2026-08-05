@@ -42,7 +42,23 @@ if hasattr(PromptServer, "instance") and PromptServer.instance:
         if not path.exists() or not path.is_file():
             return web.Response(status=404, text="Video file not found")
 
-        return web.FileResponse(path)
+        # 显式 Content-Type，便于浏览器正确识别并启用 seek/range 播放
+        content_types = {
+            ".mp4": "video/mp4",
+            ".webm": "video/webm",
+            ".mov": "video/quicktime",
+            ".mkv": "video/x-matroska",
+            ".avi": "video/x-msvideo",
+        }
+        content_type = content_types.get(path.suffix.lower(), "application/octet-stream")
+        return web.FileResponse(
+            path,
+            headers={
+                "Content-Type": content_type,
+                "Accept-Ranges": "bytes",
+                "Cache-Control": "no-cache",
+            },
+        )
 
     @PromptServer.instance.routes.post("/ryan_comfy_utils/select_dir")
     async def ryan_select_dir(request):
@@ -156,6 +172,7 @@ class RyanBatchVideoLoader:
     RETURN_NAMES = ("images", "frame_count", "video_path", "filename", "index", "total", "file_list_text", "video_info_json")
     FUNCTION = "load"
     CATEGORY = "Ryan Utils / Video"
+    DESCRIPTION = "批处理视频加载器。支持扫描目录、按文件名或修改时间排序，并通过 OpenCV 或 FFmpeg 按指定规则加载视频帧。"
 
     def load(self, video_dir, index, recursive, extensions, sort_mode, backend_mode, force_rate, custom_width, custom_height, frame_load_cap, skip_first_frames, select_every_nth):
         files = scan_video_files(video_dir, extensions, recursive)
@@ -253,6 +270,7 @@ class RyanVideoFrameSampler:
     RETURN_NAMES = ("images", "frame_indexes", "frame_count", "saved_paths_text")
     FUNCTION = "sample"
     CATEGORY = "Ryan Utils / Video"
+    DESCRIPTION = "视频帧采样器。提供首尾与均匀采样、完全均匀采样、固定间隔采样、自定义帧索引以及分镜首帧采样等多种采样模式。"
 
     def sample(self, sample_mode, frame_count, frame_interval, custom_indexes, save_mode, output_subdir, filename_prefix, 
                images=None, video_path="", scene_detector="自适应检测", scene_threshold=0.0, scene_min_len=0.6, scene_merge_min=1.0):
@@ -320,6 +338,7 @@ class RyanImageBatchSplitter:
     RETURN_NAMES = tuple(f"image_{i:02d}" for i in range(1, 13))
     FUNCTION = "run"
     CATEGORY = "Ryan Utils / Image"
+    DESCRIPTION = "图像批次拆分器。将一个包含多个帧的图像批次（Batch）拆分为最多 12 个单独的图像输出。"
 
     def run(self, images, output_count):
         import uuid
@@ -398,6 +417,7 @@ class RyanVideoSceneSplitter:
     RETURN_NAMES = ("scene_count", "manifest_json", "output_dir")
     FUNCTION = "run"
     CATEGORY = "Ryan Utils / Video"
+    DESCRIPTION = "视频分镜拆分器。支持自适应检测、内容突变检测、亮度阈值检测等模式，自动识别视频的镜头切换并将视频拆分为独立的分镜短片。"
 
     def run(self, video_path, output_dir, filename_prefix, detector, threshold, min_scene_len, merge_min_duration, fast_copy,
             force_rate=0.0, custom_width=0, custom_height=0, frame_load_cap=0, skip_first_frames=0, select_every_nth=1):

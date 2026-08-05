@@ -44,6 +44,7 @@ class RyanPromptTemplate:
     RETURN_NAMES = ("final_prompt", "template_text")
     FUNCTION = "run"
     CATEGORY = "Ryan Utils / Prompt"
+    DESCRIPTION = "提示词模板加载节点。支持从内置或自定义目录读取模板文件，并可选择是否在模板后拼接用户自定义提示词。"
 
     def run(self, template_source, prompt_dir, template_name, user_prompt, append_user_prompt):
         source = TEMPLATE_SOURCE_MAP.get(template_source, "built_in")

@@ -60,6 +60,23 @@ ACP Profile / CLI 占位符与失败语义见 `docs/agents/acp-runtime-cli-profi
 
 输出与 Universal Agent 相同的三项文本字段。可选 `export_to_file` 写入 `output/ryan_acp_exports/video_prompt/`。
 
+### Ryan MiniMax H3 Video Prompt Agent
+
+分类：`Ryan Utils / ACP`
+
+专为 **MiniMax H3** 模型设计的结构化视频生成提示词 ACP Agent。固定绑定 `minimax-h3-video-prompt` Skill。
+
+主要特性：
+- **`generation_mode` 下拉控制**：支持 `自动`、`纯文生`、`普通图生`、`首尾帧`、`全能参考`、`视频编辑` 等 6 种 H3 模式，前端 UI 自动根据模式联动显示/隐藏对应控件与智能预设槽位数。
+- **三类素材物理插槽动态调节**：
+  - **图片插槽 (`image_01` .. `image_09`)**：支持最多 9 张标准 `IMAGE` 插槽，通过 `image_slot_count` (1~9) 动态控制展开。
+  - **视频插槽 (`video_01` .. `video_03`)**：支持最多 3 段 `STRING` 视频路径插槽，通过 `video_slot_count` (0~3) 动态控制展开。
+  - **音频插槽 (`audio_01` .. `audio_03`)**：支持最多 3 段 `STRING` 音频路径插槽，通过 `audio_slot_count` (0~3) 动态控制展开。
+  - **Update 面板**：点击 `Update` 按钮可根据数量控件实时拉伸/收缩槽位。
+- **视频指定起始帧抽帧分析**：支持针对主视频源 (`video_01`) 设置 `video_start_frame`（起始帧）与 `video_frame_count`（截取帧数）控制，可准确读取主视频特定区间帧画面并自动提交给 VLM 进行视觉分析。当存在多个视频源（`video_02`、`video_03`）时，抽帧控制专服务于主视频源 `video_01`。
+- **提示词输出与导出**：输出 `response_text`（可直接接入下游 `MiniMaxH3ImageToVideo` 或 `MiniMaxH3ReferenceToVideo` 节点的 `prompt` 输入）、`session_dir`、`raw_result_json`。可选 `export_to_file` 写入 `output/ryan_acp_exports/minimax_h3_video_prompt/`。
+
+
 ### Ryan Image Analyze Agent
 
 分类：`Ryan Utils / ACP`
@@ -232,6 +249,52 @@ ACP Profile / CLI 占位符与失败语义见 `docs/agents/acp-runtime-cli-profi
 
 输出：
 - `image_01` 到 `image_12`：各个独立的单张图像（若批次尺寸小于请求拆分数量，多余输出为 `None`）
+
+### Ryan Image Generator
+
+分类：`Ryan Utils / Image`
+
+图片生成与编辑节点。支持通过文本 Prompt 生图，或者接收最多 5 张输入图片以支持图生图/图像编辑。支持从配置文件中选择 `"type": "image"` 的模型（如 Gemini、GPT、Grok），兼容 standard OpenAI 图像接口 `/v1/images/generations` 以及 Gemini `/v1/chat/completions` 多模态生图模式。
+
+输入：
+- `profile`：模型 Profile 选择（自动过滤展示 `"type": "image"` 的配置）
+- `model_override`：模型名称覆写（可选）
+- `prompt`：生图/图生图提示词
+- `size` / `custom_width` / `custom_height`：图像尺寸规格与自定义宽高
+- `number_of_images`：生成图片张数
+- `response_format`：响应格式（`auto` / `b64_json` / `url`）
+- `extra_body_json`：透传给 API Payload 的额外 JSON 参数
+- `image_01` .. `image_10`（配合 `image_slot_count` 1~5 张参考图输入槽位）
+
+输出：
+- `images`：解码后的 ComfyUI `IMAGE` 张量批次
+
+### Ryan Video Generator
+
+分类：`Ryan Utils / Video`
+
+视频生成与编辑节点。支持异步通过 Grok-imagine-video 等视频生成接口发起生成任务，支持文本生成视频、首帧生视频及多参考图生视频（Reference-to-Video）。
+
+交互流程：
+1. 发送异步任务到 `/v1/videos/generations`，获取 `request_id`
+2. 按 `polling_interval` 间隔轮询 `/v1/videos/{request_id}`
+3. 任务完成后自动下载 mp4 到 ComfyUI `output/ryan_grok_video_{uuid}.mp4`
+4. 使用后台视频解码库自动解出视频帧张量批次供下游节点连接，并在前端 UI 区域激活 HTML5 播放器显示视频效果
+
+输入：
+- `profile`：模型 Profile 选择（自动过滤展示 `"type": "image"` 的配置）
+- `model_override`：模型名称覆写（可选）
+- `prompt`：视频生成提示词
+- `aspect_ratio`：画幅比例（`16:9` / `9:16` / `1:1` / `4:3` / `3:4` / `3:2` / `2:3`）
+- `resolution`：分辨率（`480p` / `720p`）
+- `duration`：视频时长（1~15 秒）
+- `polling_interval`：轮询间隔（秒）
+- `extra_body_json`：透传给 API Payload 的额外 JSON 参数
+- `image_01` .. `image_10`（支持 1~5 张参考图物理插槽输入）
+
+输出：
+- `images`：解码后的 ComfyUI `IMAGE` 帧批次张量
+- `video_path`：保存的本地 mp4 视频文件绝对路径
 
 ## 安装
 

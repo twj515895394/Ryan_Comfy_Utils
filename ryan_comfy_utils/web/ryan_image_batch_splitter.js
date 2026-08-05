@@ -4,6 +4,9 @@ import { api } from "../../../scripts/api.js";
 const MAX_OUTPUTS = 12;
 const OUTPUT_PREFIX = "image_";
 const COUNT_WIDGET = "output_count";
+const PREVIEW_BASE_H = 160;
+const PREVIEW_ROW_H = 110;
+const COLS = 3;
 
 function outputSlotName(index) {
   return `${OUTPUT_PREFIX}${String(index).padStart(2, "0")}`;
@@ -16,11 +19,11 @@ function findWidget(node, name) {
 function cleanNativePreviewWidgets(node) {
   // 仅保留我们自定义的 widgets，移除 ComfyUI 自动添加的任何预览 widget
   if (node.widgets) {
-    node.widgets = node.widgets.filter((w) =>
-      w.name === COUNT_WIDGET ||
-      w.name === "Update Outputs" ||
-      w.name === "spacer" ||
-      w.name === "image_preview"
+    node.widgets = node.widgets.filter(
+      (w) =>
+        w.name === COUNT_WIDGET ||
+        w.name === "Update Outputs" ||
+        w.name === "image_preview"
     );
   }
 }
@@ -30,27 +33,13 @@ function enforceWidgetsOrder(node) {
 
   const ordered = [];
 
-  const countWidget = node.widgets.find(w => w.name === COUNT_WIDGET);
+  const countWidget = node.widgets.find((w) => w.name === COUNT_WIDGET);
   if (countWidget) ordered.push(countWidget);
 
-  const updateWidget = node.widgets.find(w => w.name === "Update Outputs");
+  const updateWidget = node.widgets.find((w) => w.name === "Update Outputs");
   if (updateWidget) ordered.push(updateWidget);
 
-  let spacerWidget = node.widgets.find(w => w.name === "spacer");
-  if (!spacerWidget) {
-    spacerWidget = {
-      type: "spacer",
-      name: "spacer",
-      value: null,
-      draw(ctx, node, widget_width, y, widget_height) {},
-      computeSize(width) {
-        return [width || 350, node._spacer_height || 0];
-      }
-    };
-  }
-  ordered.push(spacerWidget);
-
-  const previewWidget = node.widgets.find(w => w.name === "image_preview");
+  const previewWidget = node.widgets.find((w) => w.name === "image_preview");
   if (previewWidget) ordered.push(previewWidget);
 
   // 保证其他 widget 不丢失
@@ -61,6 +50,14 @@ function enforceWidgetsOrder(node) {
   }
 
   node.widgets = ordered;
+}
+
+function calcPreviewHeight(imageCount) {
+  const n = Math.max(0, Number(imageCount) || 0);
+  if (n <= 0) return PREVIEW_BASE_H;
+  const rows = Math.ceil(n / COLS);
+  // 单行用 base；多行按行高累加，上限约 3 行
+  return Math.min(PREVIEW_BASE_H + (Math.min(rows, 3) - 1) * PREVIEW_ROW_H, 380);
 }
 
 function applyOutputSlotVisibility(node, count) {
@@ -115,35 +112,63 @@ function applyOutputSlotVisibility(node, count) {
 
 function rebuildPreviewGrid(node, images) {
   if (!node.previewContainer) return;
-  
+
   while (node.previewContainer.firstChild) {
     node.previewContainer.removeChild(node.previewContainer.firstChild);
   }
 
-  const count = images.length;
+  const count = images?.length || 0;
   let columns = "1fr";
   if (count === 2) {
     columns = "1fr 1fr";
   } else if (count >= 3) {
     columns = "1fr 1fr 1fr";
   }
-  
-  node.previewContainer.style.display = "grid";
+
+  node.previewContainer.style.display = count > 0 ? "grid" : "flex";
   node.previewContainer.style.gridTemplateColumns = columns;
   node.previewContainer.style.gap = "6px";
   node.previewContainer.style.padding = "6px";
+  node.previewContainer.style.alignContent = "start";
+  node.previewContainer.style.justifyContent = "center";
+  node.previewContainer.style.alignItems = "center";
 
-  images.forEach(img => {
+  const previewH = calcPreviewHeight(count);
+  node.previewContainer.style.height = `${previewH}px`;
+  node._preview_height = previewH;
+
+  if (node.previewWidget) {
+    node.previewWidget.computedHeight = previewH;
+  }
+
+  if (count === 0) {
+    const empty = document.createElement("div");
+    empty.style.cssText =
+      "color:#666;font-size:12px;text-align:center;width:100%;";
+    empty.innerText = "暂无预览";
+    node.previewContainer.appendChild(empty);
+    return;
+  }
+
+  images.forEach((img) => {
     const imgEl = document.createElement("img");
-    imgEl.src = api.apiURL(`/view?filename=${encodeURIComponent(img.filename)}&type=${img.type}&subfolder=${encodeURIComponent(img.subfolder)}`);
-    imgEl.style.width = "100%";
-    imgEl.style.height = "auto";
-    imgEl.style.aspectRatio = "16/9";
-    imgEl.style.objectFit = "cover";
-    imgEl.style.backgroundColor = "#111";
-    imgEl.style.borderRadius = "4px";
-    imgEl.style.boxSizing = "border-box";
-    imgEl.style.border = "1px solid #333";
+    imgEl.src = api.apiURL(
+      `/view?filename=${encodeURIComponent(img.filename)}&type=${img.type}&subfolder=${encodeURIComponent(img.subfolder || "")}`
+    );
+    imgEl.style.cssText = [
+      "width:100%",
+      "height:100%",
+      "max-height:100%",
+      "aspect-ratio:16/9",
+      "object-fit:contain",
+      "object-position:center",
+      "background-color:#111",
+      "border-radius:4px",
+      "box-sizing:border-box",
+      "border:1px solid #333",
+      "display:block",
+    ].join(";");
+    imgEl.loading = "lazy";
     node.previewContainer.appendChild(imgEl);
   });
 }
@@ -156,7 +181,7 @@ function setupSplitterUI(node) {
       COUNT_WIDGET,
       4,
       () => {},
-      { min: 1, max: MAX_OUTPUTS, step: 1, precision: 0 },
+      { min: 1, max: MAX_OUTPUTS, step: 1, precision: 0 }
     );
   } else {
     countWidget.callback = () => {};
@@ -180,26 +205,17 @@ app.registerExtension({
   async beforeRegisterNodeDef(nodeType, nodeData) {
     if (nodeData.name !== "Ryan Image Batch Splitter") return;
 
-    // 自定义 computeSize 确保输出槽与预览网格不重叠
+    // 自定义 computeSize：控件区 + 预览区，不再用 spacer 硬对齐输出槽
     nodeType.prototype.computeSize = function () {
-      const size = [350, 200];
-      const slotsHeight = (this.outputs ? this.outputs.length : 0) * 20 + 50;
-      const widgetsHeightBeforePreview = 80; // title(30) + count(20) + button(20) + margin(10)
-      
-      const previewStart = Math.max(slotsHeight, widgetsHeightBeforePreview);
-      
-      // 计算用于推开预览组件的 spacer 高度
-      this._spacer_height = Math.max(0, previewStart - 80);
-      
-      const spacerWidget = this.widgets?.find(w => w.name === "spacer");
-      if (spacerWidget) {
-        spacerWidget.height = this._spacer_height;
-      }
-
-      const previewHeight = 180;
-      size[1] = 80 + this._spacer_height + previewHeight + 15;
-      size[0] = 350;
-      return size;
+      const width = Math.max(this.size?.[0] || 350, 320);
+      // 标题 + count + button + 边距
+      const controlsH = 90;
+      const previewH = this._preview_height || PREVIEW_BASE_H;
+      // 输出槽高度仅影响节点最小高度，不驱动预览位置
+      const slotsH = (this.outputs ? this.outputs.length : 0) * 22 + 40;
+      const contentH = controlsH + previewH + 20;
+      const height = Math.max(contentH, slotsH, 200);
+      return [width, height];
     };
 
     const originalOnNodeCreated = nodeType.prototype.onNodeCreated;
@@ -207,51 +223,74 @@ app.registerExtension({
       originalOnNodeCreated?.apply(this, arguments);
       setupSplitterUI(this);
 
+      this._preview_height = PREVIEW_BASE_H;
+
       // 通过定义 getter/setter 彻底屏蔽 ComfyUI 往该节点挂载和绘制原生预览图的任何尝试
       Object.defineProperty(this, "imgs", {
-        get() { return null; },
+        get() {
+          return null;
+        },
         set(v) {},
         configurable: true,
-        enumerable: true
+        enumerable: true,
       });
       Object.defineProperty(this, "image", {
-        get() { return null; },
+        get() {
+          return null;
+        },
         set(v) {},
         configurable: true,
-        enumerable: true
+        enumerable: true,
       });
       Object.defineProperty(this, "images", {
-        get() { return null; },
+        get() {
+          return null;
+        },
         set(v) {},
         configurable: true,
-        enumerable: true
+        enumerable: true,
       });
 
       // 创建预览网格 DOM 容器
       const previewContainer = document.createElement("div");
-      previewContainer.style.width = "100%";
-      previewContainer.style.height = "180px";
-      previewContainer.style.position = "relative";
-      previewContainer.style.backgroundColor = "#000";
-      previewContainer.style.overflowY = "auto";
-      previewContainer.style.borderRadius = "4px";
-      previewContainer.style.boxSizing = "border-box";
+      previewContainer.style.cssText = [
+        "width:100%",
+        `height:${PREVIEW_BASE_H}px`,
+        "position:relative",
+        "background-color:#000",
+        "overflow-y:auto",
+        "overflow-x:hidden",
+        "border-radius:4px",
+        "box-sizing:border-box",
+        "display:flex",
+        "align-items:center",
+        "justify-content:center",
+      ].join(";");
 
       const previewWidget = this.addDOMWidget("image_preview", "preview", previewContainer, {
         serialize: false,
         getValue() {
           return "";
         },
-        setValue(v) {}
+        setValue(v) {},
       });
 
-      previewWidget.computeSize = function (width) {
-        return [width || 350, 180];
+      previewWidget.computeSize = (width) => {
+        const h = this._preview_height || PREVIEW_BASE_H;
+        return [width || 350, h];
       };
 
       this.previewContainer = previewContainer;
       this.previewWidget = previewWidget;
-      
+
+      const originalOnResize = this.onResize;
+      this.onResize = function (size) {
+        originalOnResize?.apply(this, arguments);
+        if (this.previewContainer && this._preview_height) {
+          this.previewContainer.style.height = `${this._preview_height}px`;
+        }
+      };
+
       enforceWidgetsOrder(this);
       this.size = this.computeSize();
     };
@@ -263,6 +302,16 @@ app.registerExtension({
       }
 
       const r = originalConfigure?.apply(this, arguments);
+
+      // 同步反序列化后的 outputs 连接状态到 _all_outputs 备份中
+      if (this.outputs && this._all_outputs) {
+        for (const output of this.outputs) {
+          const backupOutput = this._all_outputs.find((out) => out.name === output.name);
+          if (backupOutput) {
+            backupOutput.links = output.links;
+          }
+        }
+      }
 
       if (!this._all_outputs) {
         this._all_outputs = [...(this.outputs || [])];
@@ -299,14 +348,25 @@ app.registerExtension({
         if (!this.properties) this.properties = {};
         this.properties._preview_images = message.images;
         rebuildPreviewGrid(this, message.images);
-        
-        // 自动将输出插槽数量调整到实际拆分出的图片数量
-        applyOutputSlotVisibility(this, message.images.length);
+
+        // 仅当用户当前 output_count 小于实际图片数时，自动扩到实际张数；
+        // 不再强行把用户手动设的更大槽位数压回去
+        const countWidget = findWidget(this, COUNT_WIDGET);
+        const currentCount = Number(countWidget?.value || 4);
+        const actualCount = message.images.length;
+        if (actualCount > 0 && actualCount > currentCount) {
+          applyOutputSlotVisibility(this, actualCount);
+        } else {
+          // 只刷新尺寸
+          this.setSize?.(this.computeSize?.());
+          if (this.graph) this.graph.setDirtyCanvas(true, true);
+        }
       }
 
       // 强力清除与排序
       cleanNativePreviewWidgets(this);
       enforceWidgetsOrder(this);
+      this.size = this.computeSize();
     };
   },
 });

@@ -1,8 +1,17 @@
 import { app } from "../../../scripts/app.js";
 import { api } from "../../../scripts/api.js";
 
+const PREVIEW_MIN_H = 120;
+const PREVIEW_MAX_H = 280;
+const PREVIEW_ASPECT = 9 / 16;
+
 function findWidget(node, name) {
   return node.widgets?.find((w) => w.name === name);
+}
+
+function calcPreviewHeight(nodeWidth) {
+  const w = Math.max(200, Number(nodeWidth) || 350);
+  return Math.max(PREVIEW_MIN_H, Math.min(PREVIEW_MAX_H, Math.round(w * PREVIEW_ASPECT)));
 }
 
 function addButton(node, label, delta) {
@@ -46,6 +55,17 @@ function addRefreshButton(node) {
   });
 }
 
+function syncPreviewSize(node) {
+  if (!node.videoWidget || !node.previewContainer) return;
+  const h = calcPreviewHeight(node.size?.[0] || 350);
+  node.previewContainer.style.height = `${h}px`;
+  node.videoWidget.computedHeight = h;
+  if (typeof node.videoWidget.computeSize === "function") {
+    // keep computeSize closure in sync via node._preview_height
+  }
+  node._preview_height = h;
+}
+
 async function refreshVideoInfo(node) {
   const dirWidget = findWidget(node, "video_dir");
   const indexWidget = findWidget(node, "index");
@@ -81,15 +101,17 @@ async function refreshVideoInfo(node) {
           node.warningText.innerText = `目录中未找到支持的视频文件。`;
         }
         if (node.videoEl) {
-          node.videoEl.src = "";
+          node.videoEl.removeAttribute("src");
+          node.videoEl.load();
         }
+        node._current_video_path = null;
         return;
       }
 
       // 1. 更新视频预览播放器
-      const ext = data.filename.split('.').pop().toLowerCase();
-      const unsupportedExts = ['mov', 'mkv', 'avi'];
-      
+      const ext = (data.filename || "").split(".").pop().toLowerCase();
+      const unsupportedExts = ["mov", "mkv", "avi"];
+
       if (node.warningEl) {
         if (unsupportedExts.includes(ext)) {
           node.warningEl.style.display = "flex";
@@ -99,41 +121,51 @@ async function refreshVideoInfo(node) {
         }
       }
 
-      const url = api.apiURL(`/ryan_comfy_utils/view_video?path=${encodeURIComponent(data.video_path)}&t=${Date.now()}`);
-      if (node.videoEl && node.videoEl.src !== url) {
+      const videoPath = data.video_path;
+      const url = api.apiURL(
+        `/ryan_comfy_utils/view_video?path=${encodeURIComponent(videoPath)}&t=${Date.now()}`
+      );
+
+      // 用路径比较，避免 browser 解析后的绝对 URL 与相对 URL 比较失败
+      if (node.videoEl && node._current_video_path !== videoPath) {
+        node._current_video_path = videoPath;
         node.videoEl.src = url;
         node.videoEl.load();
-        node.videoEl.play().catch(e => {
+        node.videoEl.play().catch((e) => {
           console.log("Autoplay preview failed:", e);
         });
       }
 
-      // 2. 动态更新参数 Label，显示实际的视频属性（格式形如: 参数名 (当前视频对应属性)）
+      // 2. 动态更新参数 Label，显示实际的视频属性
       const forceRateWidget = findWidget(node, "force_rate");
       if (forceRateWidget) {
-        forceRateWidget.label = `force_rate (fps: ${data.fps ? data.fps.toFixed(1) : 'unknown'})`;
+        forceRateWidget.label = `force_rate (fps: ${data.fps ? data.fps.toFixed(1) : "unknown"})`;
       }
-      
+
       const customWidthWidget = findWidget(node, "custom_width");
       if (customWidthWidget) {
-        customWidthWidget.label = `custom_width (orig: ${data.width || 'unknown'})`;
+        customWidthWidget.label = `custom_width (orig: ${data.width || "unknown"})`;
       }
-      
+
       const customHeightWidget = findWidget(node, "custom_height");
       if (customHeightWidget) {
-        customHeightWidget.label = `custom_height (orig: ${data.height || 'unknown'})`;
+        customHeightWidget.label = `custom_height (orig: ${data.height || "unknown"})`;
       }
-      
+
       const frameLoadCapWidget = findWidget(node, "frame_load_cap");
       if (frameLoadCapWidget) {
-        frameLoadCapWidget.label = `frame_load_cap (total: ${data.total_frames || 'unknown'})`;
+        frameLoadCapWidget.label = `frame_load_cap (total: ${data.total_frames || "unknown"})`;
       }
 
       const idxWidget = findWidget(node, "index");
       if (idxWidget) {
         idxWidget.label = `index (file: ${data.filename})`;
       }
-      
+
+      syncPreviewSize(node);
+      if (node.computeSize) {
+        node.size = node.computeSize();
+      }
       app.graph.setDirtyCanvas(true, true);
     }
   } catch (e) {
@@ -143,11 +175,11 @@ async function refreshVideoInfo(node) {
 
 function setupWidgetCallbacks(node) {
   const widgetsToWatch = ["video_dir", "index", "recursive", "extensions", "sort_mode"];
-  widgetsToWatch.forEach(name => {
+  widgetsToWatch.forEach((name) => {
     const w = findWidget(node, name);
     if (w) {
       const orig = w.callback;
-      w.callback = function(value) {
+      w.callback = function (value) {
         const res = orig ? orig.apply(this, arguments) : value;
         refreshVideoInfo(node);
         return res;
@@ -170,12 +202,23 @@ app.registerExtension({
       addButton(this, "Next Video", 1);
       addRefreshButton(this);
 
-      // 创建容器 DOM 元素
+      this._preview_height = calcPreviewHeight(this.size?.[0] || 350);
+      this._current_video_path = null;
+
+      // 创建容器 DOM 元素 — 拉满 widget 区域，画面居中
       const container = document.createElement("div");
-      container.style.width = "100%";
-      container.style.height = "180px";
-      container.style.position = "relative";
-      container.style.backgroundColor = "#000";
+      container.style.cssText = [
+        "width:100%",
+        `height:${this._preview_height}px`,
+        "position:relative",
+        "background-color:#000",
+        "overflow:hidden",
+        "display:flex",
+        "align-items:center",
+        "justify-content:center",
+        "box-sizing:border-box",
+        "border-radius:4px",
+      ].join(";");
 
       // 创建预览视频播放器 DOM 元素
       const videoEl = document.createElement("video");
@@ -183,39 +226,48 @@ app.registerExtension({
       videoEl.autoplay = true;
       videoEl.loop = true;
       videoEl.muted = true;
-      videoEl.style.width = "100%";
-      videoEl.style.height = "100%";
-      videoEl.style.objectFit = "contain";
+      videoEl.playsInline = true;
+      videoEl.style.cssText = [
+        "width:100%",
+        "height:100%",
+        "object-fit:contain",
+        "object-position:center",
+        "background-color:#000",
+        "display:block",
+      ].join(";");
 
       // 创建格式不支持或播放失败提示层
       const warningEl = document.createElement("div");
-      warningEl.style.position = "absolute";
-      warningEl.style.top = "0";
-      warningEl.style.left = "0";
-      warningEl.style.width = "100%";
-      warningEl.style.height = "100%";
-      warningEl.style.display = "none";
-      warningEl.style.flexDirection = "column";
-      warningEl.style.alignItems = "center";
-      warningEl.style.justifyContent = "center";
-      warningEl.style.backgroundColor = "rgba(0, 0, 0, 0.85)";
-      warningEl.style.color = "#ccc";
-      warningEl.style.fontSize = "12px";
-      warningEl.style.padding = "10px";
-      warningEl.style.textAlign = "center";
-      warningEl.style.pointerEvents = "none";
+      warningEl.style.cssText = [
+        "position:absolute",
+        "inset:0",
+        "display:none",
+        "flex-direction:column",
+        "align-items:center",
+        "justify-content:center",
+        "background-color:rgba(0,0,0,0.85)",
+        "color:#ccc",
+        "font-size:12px",
+        "padding:10px",
+        "text-align:center",
+        "pointer-events:none",
+        "box-sizing:border-box",
+        "z-index:2",
+      ].join(";");
 
       const warningText = document.createElement("span");
-      warningText.innerText = "此视频格式（如 .mov / .mkv / .avi）浏览器无法直接预览，但后台节点可以正常读取处理。";
+      warningText.innerText =
+        "此视频格式（如 .mov / .mkv / .avi）浏览器无法直接预览，但后台节点可以正常读取处理。";
       warningEl.appendChild(warningText);
 
       container.appendChild(videoEl);
       container.appendChild(warningEl);
 
       videoEl.onerror = () => {
-        if (videoEl.src) {
+        if (videoEl.getAttribute("src")) {
           warningEl.style.display = "flex";
-          warningText.innerText = "视频播放失败。浏览器可能不支持此编码/格式（如 H.265/HEVC、.mov、.mkv 等），但后台节点仍能正常读取处理。";
+          warningText.innerText =
+            "视频播放失败。浏览器可能不支持此编码/格式（如 H.265/HEVC、.mov、.mkv 等），但后台节点仍能正常读取处理。";
         }
       };
 
@@ -226,18 +278,28 @@ app.registerExtension({
           return videoEl.src;
         },
         setValue(v) {
-          videoEl.src = v;
-        }
+          if (v) videoEl.src = v;
+        },
       });
 
-      videoWidget.computeSize = function (width) {
-        return [width || 350, 180];
+      videoWidget.computeSize = (width) => {
+        const h = calcPreviewHeight(width || this.size?.[0] || 350);
+        this._preview_height = h;
+        return [width || 350, h];
       };
 
       this.videoEl = videoEl;
       this.warningEl = warningEl;
       this.warningText = warningText;
       this.videoWidget = videoWidget;
+      this.previewContainer = container;
+
+      // 节点宽度变化时同步预览高度
+      const originalOnResize = this.onResize;
+      this.onResize = function (size) {
+        originalOnResize?.apply(this, arguments);
+        syncPreviewSize(this);
+      };
 
       // 绑定参数变化回调
       setupWidgetCallbacks(this);
@@ -248,12 +310,14 @@ app.registerExtension({
       }, 200);
 
       // 自动计算并更新节点尺寸，防止视频容器和上面的其他输入框重叠
+      syncPreviewSize(this);
       this.size = this.computeSize();
     };
 
     const originalConfigure = nodeType.prototype.configure;
     nodeType.prototype.configure = function () {
       const r = originalConfigure?.apply(this, arguments);
+      syncPreviewSize(this);
       this.size = this.computeSize();
       refreshVideoInfo(this);
       return r;
@@ -262,7 +326,23 @@ app.registerExtension({
     const originalOnExecuted = nodeType.prototype.onExecuted;
     nodeType.prototype.onExecuted = function (message) {
       originalOnExecuted?.apply(this, arguments);
-      // 后台执行完毕后也会触发一次信息同步，确保最新状态一致
+
+      // 优先用后端 ui.video 直出路径，避免重复扫目录
+      const videoFromUi = message?.video?.[0];
+      if (videoFromUi && this.videoEl) {
+        const url = api.apiURL(
+          `/ryan_comfy_utils/view_video?path=${encodeURIComponent(videoFromUi)}&t=${Date.now()}`
+        );
+        if (this._current_video_path !== videoFromUi) {
+          this._current_video_path = videoFromUi;
+          if (this.warningEl) this.warningEl.style.display = "none";
+          this.videoEl.src = url;
+          this.videoEl.load();
+          this.videoEl.play().catch(() => {});
+        }
+      }
+
+      // 同步 label 等信息
       refreshVideoInfo(this);
     };
   },

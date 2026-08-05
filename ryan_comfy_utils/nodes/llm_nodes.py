@@ -8,7 +8,7 @@ from .comfy_image_inputs import build_image_slot_input_types, flatten_slot_tenso
 
 def _profiles():
     try:
-        return list_profile_names()
+        return list_profile_names("chat")
     except Exception:
         return ["default"]
 
@@ -37,6 +37,7 @@ class RyanLLMChat:
     RETURN_NAMES = ("response_text", "request_json", "raw_response_json")
     FUNCTION = "run"
     CATEGORY = "Ryan Utils / LLM"
+    DESCRIPTION = "大语言模型聊天节点。支持系统和用户提示词、自定义超时、重试、深度思考开关，以及通过 JSON 传入的额外参数。"
 
     def run(self, profile, model_override, system_prompt, user_prompt, temperature, max_tokens, top_p, timeout_seconds, retry_count, disable_thinking, extra_body_json):
         messages = []
@@ -85,6 +86,7 @@ class RyanLLMVisionChat:
     RETURN_NAMES = ("response_text", "request_json", "raw_response_json")
     FUNCTION = "run"
     CATEGORY = "Ryan Utils / LLM"
+    DESCRIPTION = "支持多模态视觉的大语言模型聊天节点。最多可接收 10 个图像槽位输入，并在发送前自动缩放与转换格式。"
 
     def run(
         self,

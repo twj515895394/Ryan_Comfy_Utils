@@ -19,6 +19,7 @@ class RyanFileExporter:
     RETURN_NAMES = ("file_path", "file_text")
     FUNCTION = "run"
     CATEGORY = "Ryan Utils / File"
+    DESCRIPTION = "文件导出节点。将输入的文本内容写入本地指定子目录下的文件（支持 txt、md、json 格式），可自动追加时间戳。"
 
     def run(self, text, output_subdir, filename, extension, append_timestamp, overwrite):
         path = write_text_export(

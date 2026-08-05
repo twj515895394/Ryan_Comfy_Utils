@@ -1,0 +1,6 @@
+interface:
+  display_name: "图片编辑提示词架构师（中文版）"
+  short_description: "分析参考图并生成可直接使用的中文图片编辑提示词"
+  default_prompt: "分析我提供的图片和修改要求，生成优化后的中文图片编辑提示词；只输出提示词，不生成图片。"
+policy:
+  allow_implicit_invocation: true

@@ -10,6 +10,8 @@ const RYAN_MULTI_IMAGE_NODES = new Set([
   "Ryan ACP Video Prompt Agent",
   "Ryan ACP Image Analyze Agent",
   "Ryan LLM Vision Chat",
+  "Ryan Image Generator",
+  "Ryan Video Generator",
 ]);
 
 function slotName(index) {
@@ -116,6 +118,16 @@ app.registerExtension({
       }
 
       const r = originalConfigure?.apply(this, arguments);
+
+      // 同步反序列化后的 inputs 连接状态到 _all_inputs 备份中
+      if (this.inputs && this._all_inputs) {
+        for (const input of this.inputs) {
+          const backupInput = this._all_inputs.find((inp) => inp.name === input.name);
+          if (backupInput) {
+            backupInput.link = input.link;
+          }
+        }
+      }
 
       // configure 完成后，重新备份并应用隐藏
       if (!this._all_inputs) {

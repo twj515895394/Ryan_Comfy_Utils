@@ -1,0 +1,19 @@
+{
+  "node_id": "ryan.acp.minimax_h3_video_prompt_agent",
+  "skill_id": "minimax-h3-video-prompt",
+  "mode": "fixed",
+  "context_template": "系统已将目标 Skill 目录配置为: {skill_directory}\n请优先通过工具读取并学习其中的 SKILL.md 以及 references/ 下的所有规则文件（h3-prompt-rules.md、h3-prompt-templates.md、h3-quality-checklist.md），然后严格按照其中的规则执行以下用户任务。\n\n请使用快速模式直接运行此 Skill。直接且仅返回生成的最终 MiniMax H3 视频提示词内容，绝对不要包含任何对话性的前言、解释、分析说明或 Markdown 代码包裹。\n\n用户输入:\n{input.text}\n\n关键帧路径:\n{input.images}\n",
+  "input_contract": {
+    "text": true,
+    "images": true,
+    "files": false
+  },
+  "output_contract": {
+    "type": "text",
+    "fields": ["response_text", "raw_result_json"]
+  },
+  "result_mapping": {
+    "response_text": "outputs.response_text",
+    "raw_result_json": "raw_result_json"
+  }
+}

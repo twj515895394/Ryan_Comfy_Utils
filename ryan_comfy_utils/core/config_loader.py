@@ -37,9 +37,15 @@ def load_profiles() -> dict:
     return data
 
 
-def list_profile_names():
+def list_profile_names(profile_type: str | None = None):
     data = load_profiles()
-    names = sorted(data.get("profiles", {}).keys())
+    profiles = data.get("profiles", {})
+    names = []
+    for name, p_data in profiles.items():
+        p_type = p_data.get("type", "chat")
+        if profile_type is None or p_type == profile_type:
+            names.append(name)
+    names = sorted(names)
     if not names:
         return ["default"]
     return names

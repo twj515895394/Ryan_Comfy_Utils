@@ -10,6 +10,7 @@ NODE_SLUG_IMAGE_ANALYZE = "image_analyze"
 NODE_SLUG_IMAGE_PROMPT = "image_prompt"
 NODE_SLUG_VIDEO_PROMPT = "video_prompt"
 NODE_SLUG_FILE_GENERATOR = "file_generator"
+NODE_SLUG_MINIMAX_H3_VIDEO_PROMPT = "minimax_h3_video_prompt"
 
 EXPORT_SUBDIR = "ryan_acp_exports"
 
