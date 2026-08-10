@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "display_name": "创意策划",
+  "recommended_agent_name": "创意策划",
+  "accepts_context_kinds": ["*"],
+  "produces_context_kind": "creative.story",
+  "discussion_mode": true,
+  "commit_mode": true,
+  "commit_title": "Creative Story Canon"
+}

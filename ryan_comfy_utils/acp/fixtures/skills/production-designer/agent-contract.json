@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "display_name": "美术/资产设计",
+  "recommended_agent_name": "美术资产设计师",
+  "accepts_context_kinds": ["creative.story", "character.design", "location.design", "research.note"],
+  "produces_context_kind": "production.design",
+  "discussion_mode": true,
+  "commit_mode": true,
+  "commit_title": "Production Design Canon"
+}

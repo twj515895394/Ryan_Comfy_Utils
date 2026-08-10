@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "display_name": "视频提示词导演",
+  "recommended_agent_name": "视频提示词导演",
+  "accepts_context_kinds": ["storyboard.plan", "script.direction", "production.design", "creative.story"],
+  "produces_context_kind": "video.prompts",
+  "discussion_mode": true,
+  "commit_mode": true,
+  "commit_title": "Video Prompt Canon"
+}
