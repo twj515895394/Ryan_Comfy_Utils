@@ -440,57 +440,73 @@ class RyanACPImageAnalyzeAgent:
 H3_GENERATION_MODES = (
     "纯文生",
     "普通图生",
+    "首帧生成",
     "首尾帧",
+    "尾帧生成",
     "全能参考",
     "视频编辑",
+    "视频续接",
 )
 
 H3_MODE_MAP = {
-    "纯文生": "text_to_video",
-    "普通图生": "image_to_video",
-    "首尾帧": "first_last_frame",
-    "全能参考": "omni_reference",
-    "视频编辑": "video_edit",
+    "纯文生": "T2VA",
+    "普通图生": "Ref2VA",
+    "首帧生成": "I2VA",
+    "首尾帧": "FL2VA",
+    "尾帧生成": "L2VA",
+    "全能参考": "Ref2VA",
+    "视频编辑": "Ref2VA",
+    "视频续接": "Ref2VA",
 }
+
+H3_TASK_RELATIONS = (
+    "无",
+    "Video Editing（视频编辑）",
+    "Video Continuation（视频续接）",
+    "Audio Reuse（音频复用）",
+    "Audio Reference（音频参考）",
+)
 
 
 def _build_h3_extra_lines(
     generation_mode: str,
-    image_slot_count: int,
+    task_relation: str,
     connected_image_count: int,
     video_paths: list[str],
     audio_paths: list[str],
+    image_role_mapping: str = "",
+    asset_role_mapping: str = "",
     video_sample_info: list[str] | None = None,
 ) -> str:
-    """构建追加到 user_text 的模式与素材上下文。"""
-    lines: list[str] = []
+    """构建传给 Skill 的确定性模式、关系和素材上下文。"""
+    lines: list[str] = [
+        f"基础生成模式: {H3_MODE_MAP.get(generation_mode, generation_mode)}",
+        f"用户界面模式: {generation_mode}",
+        f"附加任务关系: {task_relation or '无'}",
+    ]
 
-    # 模式提示
-    lines.append(f"生成模式: {generation_mode}")
-
-    # 素材清单
     assets: list[str] = []
     if connected_image_count > 0:
         assets.append(f"图片: {connected_image_count} 张（已通过图片槽位上传）")
     if video_sample_info:
-        for info in video_sample_info:
-            assets.append(info)
+        assets.extend(video_sample_info)
     elif video_paths:
-        for i, vp in enumerate(video_paths, 1):
-            assets.append(f"视频{i}: {vp}")
+        assets.extend(f"视频{i}: {path}" for i, path in enumerate(video_paths, 1))
     if audio_paths:
-        for i, ap in enumerate(audio_paths, 1):
-            assets.append(f"音频{i}: {ap}")
+        assets.extend(f"音频{i}: {path}" for i, path in enumerate(audio_paths, 1))
 
+    lines.append("素材清单:")
     if assets:
-        lines.append("素材清单:")
-        for a in assets:
-            lines.append(f"- {a}")
+        lines.extend(f"- {asset}" for asset in assets)
+    else:
+        lines.append("- 无（纯文本生成场景）")
 
-    if not lines:
-        return ""
+    if image_role_mapping.strip():
+        lines.extend(("图片角色映射:", image_role_mapping.strip()))
+    if asset_role_mapping.strip():
+        lines.extend(("素材角色映射:", asset_role_mapping.strip()))
+
     return "\n".join(lines) + "\n"
-
 
 MAX_H3_IMAGE_SLOTS = 9
 MAX_H3_VIDEO_SLOTS = 3
@@ -499,11 +515,12 @@ MAX_H3_AUDIO_SLOTS = 3
 
 def build_h3_input_types() -> dict[str, tuple]:
     optional: dict[str, tuple] = {}
+    # 保持旧字段顺序；ComfyUI 会按 widget 位置恢复已保存工作流。
     for i in range(1, MAX_H3_IMAGE_SLOTS + 1):
         optional[f"image_{i:02d}"] = ("IMAGE",)
     optional["image_slot_count"] = (
         "INT",
-        {"default": 2, "min": 1, "max": MAX_H3_IMAGE_SLOTS, "step": 1},
+        {"default": 2, "min": 0, "max": MAX_H3_IMAGE_SLOTS, "step": 1},
     )
 
     for i in range(1, MAX_H3_VIDEO_SLOTS + 1):
@@ -523,6 +540,10 @@ def build_h3_input_types() -> dict[str, tuple]:
     )
 
     optional["export_filename"] = ("STRING", {"default": ""})
+    # 新字段只能追加，不能插入旧字段中间。
+    optional["task_relation"] = (list(H3_TASK_RELATIONS), {"default": "无"})
+    optional["image_role_mapping"] = ("STRING", {"default": "", "multiline": True})
+    optional["asset_role_mapping"] = ("STRING", {"default": "", "multiline": True})
     return optional
 
 
@@ -531,7 +552,7 @@ class RyanACPMiniMaxH3VideoPromptAgent:
     def INPUT_TYPES(cls):
         return {
             "required": {
-                "generation_mode": (list(H3_GENERATION_MODES), {"default": "纯文生"}),
+                "generation_mode": (list(H3_GENERATION_MODES), {"default": H3_GENERATION_MODES[0]}),
                 "user_text": ("STRING", {"default": "", "multiline": True}),
                 "export_to_file": ("BOOLEAN", {"default": False}),
             },
@@ -544,10 +565,9 @@ class RyanACPMiniMaxH3VideoPromptAgent:
     CATEGORY = "Ryan Utils / ACP"
     DESCRIPTION = (
         "MiniMax H3 视频提示词生成 ACP 智能体。"
-        "支持纯文生、普通图生、首尾帧、全能参考、视频编辑等多种 H3 视频生成场景的提示词编排，"
-        "支持动态控制图片插槽(1~9)、视频插槽(0~3)、音频插槽(0~3)，兼容 LoadVideo、LoadAudio 连线，"
-        "可指定主视频源(video_01)的起始帧（video_start_frame）与截取帧数（video_frame_count）供智能体分析，"
-        "自动将素材和模式信息整合后生成可直接使用的 H3 结构化提示词。"
+        "支持 T2VA、I2VA、FL2VA、L2VA、Ref2VA，以及视频编辑、视频续接和音频复用/参考，"
+        "支持动态控制图片插槽(0~9)、视频插槽(0~3)、音频插槽(0~3)，兼容 LoadVideo、LoadAudio 连线。"
+        "可指定视频抽帧范围、图片角色映射和素材角色映射，生成符合官方 H3 结构的提示词。"
     )
 
     def run(
@@ -555,6 +575,9 @@ class RyanACPMiniMaxH3VideoPromptAgent:
         generation_mode,
         user_text,
         export_to_file,
+        task_relation="无",
+        image_role_mapping="",
+        asset_role_mapping="",
         image_slot_count=2,
         video_slot_count=1,
         video_start_frame=0,
@@ -568,19 +591,25 @@ class RyanACPMiniMaxH3VideoPromptAgent:
         manifest_path=str(DEFAULT_MINIMAX_H3_VIDEO_PROMPT_MANIFEST_PATH),
         **kwargs,
     ):
-        img_limit = max(1, min(int(image_slot_count or 2), MAX_H3_IMAGE_SLOTS))
-        slots = [kwargs.get(f"image_{i:02d}") for i in range(1, img_limit + 1)]
+        img_limit = max(0, min(int(image_slot_count if image_slot_count is not None else 2), MAX_H3_IMAGE_SLOTS))
+        slots = [kwargs.get(f"image_{i:02d}") for i in range(1, img_limit + 1)] if img_limit > 0 else []
         connected_count = sum(1 for s in slots if s is not None)
 
         raw_video_inputs = []
-        vid_limit = max(0, min(int(video_slot_count or 1), MAX_H3_VIDEO_SLOTS))
+        vid_limit = max(0, min(int(video_slot_count if video_slot_count is not None else 1), MAX_H3_VIDEO_SLOTS))
         for i in range(1, vid_limit + 1):
             val = kwargs.get(f"video_{i:02d}")
             if val is not None and val != "":
                 raw_video_inputs.append((i, val))
+        has_video_input = bool(raw_video_inputs)
+        if not has_video_input:
+            # 没有视频时，帧范围参数没有语义；忽略其旧工作流残值，
+            # 避免前端恢复值或手动填写值触发无关校验。
+            video_start_frame = 0
+            video_frame_count = 0
 
         raw_audio_inputs = []
-        aud_limit = max(0, min(int(audio_slot_count or 0), MAX_H3_AUDIO_SLOTS))
+        aud_limit = max(0, min(int(audio_slot_count if audio_slot_count is not None else 0), MAX_H3_AUDIO_SLOTS))
         for i in range(1, aud_limit + 1):
             val = kwargs.get(f"audio_{i:02d}")
             if val is not None and val != "":
@@ -588,6 +617,7 @@ class RyanACPMiniMaxH3VideoPromptAgent:
 
         # 视频抽帧处理与素材解析
         video_sample_info: list[str] = []
+        sampled_image_paths: list[str] = []
         parsed_video_paths: list[str] = []
         profile = load_profile(_resolve_path(profile_path))
         workspace = _resolve_workspace_root(workspace_root, profile)
@@ -628,6 +658,7 @@ class RyanACPMiniMaxH3VideoPromptAgent:
                     pil_img = Image.fromarray(arr)
                     frame_filename = f"video{v_idx:02d}_frame_{slice_start + f_i:04d}.png"
                     out_p = target_images_dir / frame_filename
+                    sampled_image_paths.append(str(out_p))
                     pil_img.save(out_p, format="PNG")
                 parsed_video_paths.append(f"video_slot_{v_idx:02d}_tensor_frames")
 
@@ -651,6 +682,7 @@ class RyanACPMiniMaxH3VideoPromptAgent:
                             pil_img = Image.fromarray(arr)
                             frame_filename = f"video{v_idx:02d}_frame_{cur_start_f + f_i:04d}.png"
                             out_p = target_images_dir / frame_filename
+                            sampled_image_paths.append(str(out_p))
                             pil_img.save(out_p, format="PNG")
                     except Exception as exc:
                         print(f"⚠️ Video frame sampling failed for {vp}: {exc}")
@@ -678,11 +710,22 @@ class RyanACPMiniMaxH3VideoPromptAgent:
 
         extra = _build_h3_extra_lines(
             generation_mode=generation_mode,
-            image_slot_count=image_slot_count,
+            task_relation=task_relation,
             connected_image_count=connected_count,
             video_paths=parsed_video_paths,
             audio_paths=parsed_audio_paths,
+            image_role_mapping=image_role_mapping,
+            asset_role_mapping=asset_role_mapping,
             video_sample_info=video_sample_info if video_sample_info else None,
+        )
+
+        # 图片槽位由 resolver 处理；视频抽帧图片已在当前 session/input/images 下，
+        # 通过 image_paths 传入后会被识别为 session 内路径，不会重复复制。
+        acp_image_paths = "\n".join(sampled_image_paths)
+        acp_file_paths = "\n".join(
+            path
+            for path in (*parsed_video_paths, *parsed_audio_paths)
+            if Path(path).expanduser().exists()
         )
 
         response_text, session_dir, raw_json = run_fixed_acp_agent(
@@ -692,7 +735,8 @@ class RyanACPMiniMaxH3VideoPromptAgent:
             session_id=session_id,
             skill_root=skill_root,
             user_text=user_text,
-            image_paths="",
+            image_paths=acp_image_paths,
+            file_paths=acp_file_paths,
             extra_user_lines=extra,
             image_slots=slots,
         )

@@ -1,7 +1,7 @@
 import json
 import subprocess
+import time
 from pathlib import Path
-
 from .asset_materializer import materialize_input_assets
 from .cli_runner import run_cli_command
 from .command_expand import expand_cli_command
@@ -16,6 +16,11 @@ from .workspace import prepare_workspace
 _MAX_ERROR_SNIPPET = 2000
 
 _ERROR_STATUSES = frozenset({"error", "failed"})
+
+
+def _log(message: str) -> None:
+    """输出不包含命令行参数、路径和密钥的 ACP 运行状态。"""
+    print(f"[RyanACP] {message}")
 
 
 def _truncate(text: str, limit: int = _MAX_ERROR_SNIPPET) -> str:
@@ -166,8 +171,12 @@ def execute_text_session(
     env_overrides = dict(runner_profile.get("environment") or {})
     env_overrides.setdefault("RYAN_ACP_CONTEXT_FILE", prompt_abs)
     env_overrides.setdefault("RYAN_ACP_SESSION_DIR", session_abs)
-
     timeout_seconds = int(runner_profile["timeout_seconds"])
+    call_started = time.perf_counter()
+    _log(
+        f"external_call_start runner={runner_profile.get('runner', 'unknown')} "
+        f"skill={skill_id or 'none'} timeout={timeout_seconds}s"
+    )
     try:
         cli_result = run_cli_command(
             command=command,
@@ -177,9 +186,28 @@ def execute_text_session(
             stdin_text=rendered_context,
         )
     except subprocess.TimeoutExpired as exc:
+        elapsed_ms = (time.perf_counter() - call_started) * 1000
+        _log(
+            f"external_call_end status=timeout elapsed_ms={elapsed_ms:.0f} "
+            f"runner={runner_profile.get('runner', 'unknown')} skill={skill_id or 'none'}"
+        )
         raise RuntimeError(
             f"ACP CLI timed out after {timeout_seconds}s session_dir={session_dir}"
         ) from exc
+    except Exception:
+        elapsed_ms = (time.perf_counter() - call_started) * 1000
+        _log(
+            f"external_call_end status=error elapsed_ms={elapsed_ms:.0f} "
+            f"runner={runner_profile.get('runner', 'unknown')} skill={skill_id or 'none'}"
+        )
+        raise
+
+    elapsed_ms = (time.perf_counter() - call_started) * 1000
+    _log(
+        f"external_call_end status=returned returncode={cli_result['returncode']} "
+        f"elapsed_ms={elapsed_ms:.0f} "
+        f"runner={runner_profile.get('runner', 'unknown')} skill={skill_id or 'none'}"
+    )
 
     _raise_for_cli_failure(
         returncode=cli_result["returncode"],

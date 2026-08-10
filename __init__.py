@@ -11,6 +11,12 @@ from .ryan_comfy_utils.nodes.prompt_nodes import RyanPromptTemplate
 from .ryan_comfy_utils.nodes.video_nodes import RyanBatchVideoLoader, RyanVideoFrameSampler, RyanImageBatchSplitter, RyanVideoSceneSplitter
 from .ryan_comfy_utils.nodes.image_generator_node import RyanImageGenerator
 from .ryan_comfy_utils.nodes.video_generator_node import RyanVideoGenerator
+from .ryan_comfy_utils.nodes.smart_filter_node import (
+    RyanSmartImageFilter,
+    RyanSmartVideoFilter,
+    RyanSmartAudioFilter,
+    RyanSmartTextFilter,
+)
 
 WEB_DIRECTORY = "./ryan_comfy_utils/web"
 
@@ -30,6 +36,10 @@ NODE_CLASS_MAPPINGS = {
     "Ryan File Exporter": RyanFileExporter,
     "Ryan Image Generator": RyanImageGenerator,
     "Ryan Video Generator": RyanVideoGenerator,
+    "Ryan Smart Image Filter": RyanSmartImageFilter,
+    "Ryan Smart Video Filter": RyanSmartVideoFilter,
+    "Ryan Smart Audio Filter": RyanSmartAudioFilter,
+    "Ryan Smart Text Filter": RyanSmartTextFilter,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
@@ -48,6 +58,10 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "Ryan File Exporter": "Ryan File Exporter",
     "Ryan Image Generator": "Ryan Image Generator",
     "Ryan Video Generator": "Ryan Video Generator",
+    "Ryan Smart Image Filter": "Ryan Smart Image Filter",
+    "Ryan Smart Video Filter": "Ryan Smart Video Filter",
+    "Ryan Smart Audio Filter": "Ryan Smart Audio Filter",
+    "Ryan Smart Text Filter": "Ryan Smart Text Filter",
 }
 
 __all__ = ["NODE_CLASS_MAPPINGS", "NODE_DISPLAY_NAME_MAPPINGS", "WEB_DIRECTORY"]

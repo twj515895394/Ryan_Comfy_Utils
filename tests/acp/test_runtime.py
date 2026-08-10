@@ -1,6 +1,9 @@
+import io
 import tempfile
 import unittest
+from contextlib import redirect_stdout
 from pathlib import Path
+from unittest.mock import patch
 
 from ryan_comfy_utils.acp.runtime import execute_text_session, map_result_fields
 
@@ -76,6 +79,74 @@ class TestACPRuntime(unittest.TestCase):
             self.assertIn("frame_001.png", context_text)
             self.assertIn("input/files/", context_text)
             self.assertIn("notes.txt", context_text)
+
+    def test_execute_text_session_logs_external_call_timing(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            skill_root = _skill_root_with("video_prompt_generator", root)
+            output = io.StringIO()
+            with redirect_stdout(output):
+                execute_text_session(
+                    workspace_root=root,
+                    session_id="session_log",
+                    skill_root=skill_root,
+                    skill_id="video_prompt_generator",
+                    context_template="{input.text}",
+                    user_text="timing test",
+                    runner_profile={
+                        "runner": "test_runner",
+                        "command": ["python3", "-c", "print('ok')"],
+                        "timeout_seconds": 10,
+                        "environment": {},
+                    },
+                )
+
+            log = output.getvalue()
+            self.assertIn(
+                "[RyanACP] external_call_start runner=test_runner "
+                "skill=video_prompt_generator timeout=10s",
+                log,
+            )
+            self.assertRegex(
+                log,
+                r"\[RyanACP\] external_call_end status=returned "
+                r"returncode=0 elapsed_ms=\d+ runner=test_runner "
+                r"skill=video_prompt_generator",
+            )
+
+
+    @patch(
+        "ryan_comfy_utils.acp.runtime.run_cli_command",
+        side_effect=RuntimeError("runner failed"),
+    )
+    def test_execute_text_session_logs_failed_external_call(self, _run_cli):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            skill_root = _skill_root_with("video_prompt_generator", root)
+            output = io.StringIO()
+            with redirect_stdout(output):
+                with self.assertRaises(RuntimeError):
+                    execute_text_session(
+                        workspace_root=root,
+                        session_id="session_log_error",
+                        skill_root=skill_root,
+                        skill_id="video_prompt_generator",
+                        context_template="{input.text}",
+                        user_text="timing failure test",
+                        runner_profile={
+                            "runner": "test_runner",
+                            "command": ["fake-runner"],
+                            "timeout_seconds": 10,
+                            "environment": {},
+                        },
+                    )
+
+            self.assertRegex(
+                output.getvalue(),
+                r"\[RyanACP\] external_call_end status=error elapsed_ms=\d+ "
+                r"runner=test_runner skill=video_prompt_generator",
+            )
+            self.assertNotIn("fake-runner", output.getvalue())
 
     def test_map_result_fields_reads_manifest_mapping_paths(self):
         payload = {

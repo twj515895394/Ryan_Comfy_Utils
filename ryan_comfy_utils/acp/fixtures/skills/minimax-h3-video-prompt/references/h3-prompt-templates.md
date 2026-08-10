@@ -1,121 +1,145 @@
 # MiniMax H3 提示词模板
 
-以下模板用于组织内容，不要求逐字照抄。先完成素材映射，再选择最接近的模板；必要时组合多个模板。
+模板用于组织内容，不要求逐字照抄。先完成模式判断和素材映射，再选择最接近的模板。最终 prompt 默认使用官方字段；对白、歌词、字幕、Logo 和 UI 文案保留用户原文。
 
-## 1. 纯文字生成
+## 1. T2VA：纯文生
 
 ### 适用条件
 
-无参考素材，或用户明确要求纯文生。
+没有参考素材，从文本构造完整视听时间线。
 
 ### 结构
 
 ```text
-【核心创意】时长，画幅，主体在地点做什么；题材与视觉风格；整体运镜和剪辑方式。
-【画面过程说明】
-0–N 秒：景别、主体位置、动作、镜头运动、环境变化。
-N–M 秒：景别、动作推进、细节特写、声音或转场。
-【声音与文字】环境声、对白、音乐、屏幕文字原文。
-【保持项与禁止项】不要出现什么，不要使用什么风格，不要改变什么。
+integrated_multimodal_description: [Shot 1] 视觉媒介与整体风格，景别、主体位置、环境和初始状态。主体完成动作，镜头以明确的运动类型、幅度和速度跟随；对白或画内声音写在对应动作旁。 [Shot 2] At 00:SS.mmm, the camera cuts to ...
+
+overall_soundscape: 全片环境声、动作声和非语言人声，1–4 句；不要重复对白和歌曲。
+
+non_diegetic_music: 角色听不到的背景音乐；无音乐使用 N/A。
 ```
 
-### 示例
-
-```text
-【核心创意】15 秒，16:9 横版写实电影感短片。清晨薄雾中的湿地芦苇荡，一只白鹤站在浅水中缓慢转头看向镜头，整体安静、克制、自然纪录片质感。
-【画面过程说明】0–5 秒：大全景交代湿地、芦苇和浅水，白鹤位于画面右下方，柔和逆光穿过薄雾。5–10 秒：中景，白鹤抬头、收起一侧翅膀，水面出现细小涟漪，镜头缓慢推进。10–15 秒：头部特写，白鹤转头直视镜头，雾气在背景中缓慢流动，画面自然停留。
-【声音与文字】只有远处水鸟、芦苇摩擦、浅水轻响和风声；非叙事性音乐：N/A；无字幕、无 Logo、无水印。
-【保持项与禁止项】保持自然动物动作和真实羽毛细节；不要动画感、不要夸张慢动作、不要新增人物或建筑。
-```
-
-## 2. 单图普通图生
+## 2. I2VA：首帧向后发展
 
 ### 适用条件
 
-图片用于人物、物体、场景、风格或构图参考，但用户没有指定首帧/尾帧。
-
-### 结构
+用户明确指定图片为首帧。
 
 ```text
-【参考素材说明】@图片1 是人物/物体/场景参考，只锁定……；不参考……。
-【核心创意】时长、画幅、主体、事件、风格。
-【画面过程说明】按时间线描述从参考状态开始发生的动作、运镜和声音。
-【保持项与禁止项】锁定一致性和排除项。
+For the target video, at 0.00 seconds into the target video, <Picture 1> (from [Shot 1]) is fully referenced.
+
+integrated_multimodal_description: [Shot 1] 从 <Picture 1> 的主体、构图、服装、空间和光线开始，保持身份和关键关系；随后描述动作起始、连续发展、镜头运动和结果。
+
+overall_soundscape: ...
+
+non_diegetic_music: ...
 ```
 
-## 3. 首帧/尾帧
+不要把单张普通参考图默认写成 I2VA。
+
+## 3. FL2VA：首尾帧补间
 
 ### 适用条件
 
-用户明确指定一张图为首帧/尾帧，或明确两张图是首帧与尾帧。
-
-### 结构
+用户明确指定首帧和尾帧。
 
 ```text
-【参考素材说明】@图片1 是首帧参考图，必须保持……；@图片2 是尾帧参考图，必须保持……。
-【核心创意】在两帧之间自然完成……，不自动增加切镜。
-【连续过程】从首帧状态开始，主体如何移动、变形、改变光线和产生声音，最后自然到达尾帧状态。
-【保持项与禁止项】保持主体身份、空间关系和首尾帧构图；不要硬切、不要黑屏、不要凭空增加主体。
+How the reference pictures align with the target video — Picture 1 (from Shot 1) aligns with the 0.00-second mark of the target video; Picture 2 (from Shot 1) aligns with the 8.00-second mark of the target video.
+
+integrated_multimodal_description: [Shot 1] 从 Picture 1 的起始状态开始，描述主体移动、姿态变化、物体状态、镜头和光线的连续变化，逐步缩小与 Picture 2 的差异，并在视频末端到达 Picture 2 的构图和状态。
+
+overall_soundscape: ...
+
+non_diegetic_music: ...
 ```
 
-## 4. 多模态参考
+默认使用单一连续镜头；只有用户明确要求多镜头时才改变结构。
+
+## 4. L2VA：向尾帧收敛
 
 ### 适用条件
 
-人物图、场景图、动作视频、运镜视频和音频共同参与创作。
-
-### 结构
+用户明确指定尾帧，没有指定首帧。
 
 ```text
-【参考素材说明】
-@图片1 是人物参考，锁定脸、发型和服装轮廓。
-@图片2 是场景参考，锁定空间结构和光影氛围。
-@视频1 是动作参考，只参考动作轨迹和节奏。
-@视频2 是运镜参考，只参考镜头高度、移动方向和切镜节奏。
-@音频1 是音色/节奏参考，台词为：“……”；不复制原音频内容以外的声音。
-【核心创意】主体在新场景中完成新事件，明确时长、画幅和整体风格。
-【画面过程说明】按 Shot 或时间线写出景别、动作、运镜、台词、音效和切换。
-【保持项与禁止项】明确保留的角色特征、未参考的维度和禁止新增项。
+How the reference pictures align with the target video — Picture 1 (from [Shot N]) aligns with the 8.00-second mark of the target video.
+
+integrated_multimodal_description: [Shot 1] 从与 Picture 1 相容的前置状态开始，描述动作、物体状态、镜头和空间关系逐步向尾帧收敛；最后一个 Shot 到达 Picture 1 的主体位置、姿态、构图、光线和细节。
+
+overall_soundscape: ...
+
+non_diegetic_music: ...
 ```
 
-## 5. 对象替换或增加
+不要把尾帧图片放在 Shot 1，也不要让最后状态只停留在“类似尾帧”。
+
+## 5. Ref2VA：全参考
+
+### 适用条件
+
+多张图片、视频、音频共同参与生成，或素材需要分别指定人物、场景、动作、运镜和声音角色。
 
 ```text
-【参考素材说明】@视频1 是待编辑原视频；@图片1 是替换对象参考，只锁定外形、颜色和材质。
-【修改项】将原视频中……替换为……；新增……并放在……位置；动作和时序跟随原视频。
-【保持项】保持原视频镜头运动、时长、主体动作、空间遮挡、光线方向和其他未修改物体不变。
-【禁止误改】不要改变画幅、原主体身份、背景结构、服装、表情和未指定文字。
-【声音】保持原环境声；如需替换对白，写出完整新台词并匹配口型时长。
+subject_definitions: <Subject 1> 是来自 <Picture 1> 的人物，只锁定脸部、发型和服装轮廓。<Subject 2> 是来自 <Picture 2> 的场景，只锁定空间结构和光线。<Video 1> 是动作参考，不复制其中人物身份。<Audio 1> 仅作为音色参考，不复制原始音频信号。
+
+summary: [reference generation] 目标视频使用 <Subject 1>、<Subject 2>、<Video 1> 和 <Audio 1> 的指定关系完成新的事件。
+
+retention_analysis: <Subject 1> (appears in [Shot 1]): fully_preserved - ...; <Subject 2>: partially_preserved - ...; <Video 1> (action rhythm): weak_reference - ...; <Audio 1>: reference - ...
+
+detailed_description: 先用一至两句建立整体视觉媒介和风格，再按播放顺序描述每个 Shot 的构图、主体、环境、动作、镜头、声音和引用标签。每个说话人使用稳定的 (S1)/(S2)，对白使用 <d>[Language] 原文</d>。
+
+overall_soundscape: ...
+
+non_diegetic_music: ...
 ```
 
-## 6. 背景或光影替换
+## 6. 视频编辑
 
 ```text
-【参考素材说明】@视频1 是原视频，保留人物动作和镜头运动；@图片1/@视频2 是新背景或光影参考。
-【修改项】将……替换为……；新背景透视、景深、遮挡、阴影和高光方向与原镜头匹配。
-【保持项】原人物、动作时序、镜头轨迹、空间相对位置和未修改物体保持不变。
-【禁止误改】不要改变主体比例、动作速度、表情、服装或原有剪辑节奏。
+subject_definitions: <Video 1> 是待编辑原视频；<Subject 1> 是需要替换或修改的目标；<Picture 1> 是新对象参考，只锁定外形、颜色和材质。
+
+summary: [video editing] The target video is an edited version of <Video 1>.
+
+retention_analysis: <Video 1> (camera, timing and unmodified content): fully_preserved - ...; <Subject 1>: attribute_transfer - ...
+
+detailed_description: 修改项：...；修改范围：...；保持原镜头、动作、时序、空间遮挡、光线和未修改内容；禁止改变未列出的身份、服装、表情、文字和背景关系。
+
+overall_soundscape: 保留或替换的环境声说明。
+
+non_diegetic_music: 保留、替换或 N/A。
 ```
 
-## 7. 台词、音色或声音替换
+## 7. 视频续接
 
 ```text
-【参考素材说明】@视频1 是原视频；@音频1 是音色或目标台词参考。
-【修改项】将角色……的台词替换为：“……”；使用 @音频1 的音色/语气；根据新台词微调表演和口型。
-【保持项】保持原镜头、人物身份、环境声、动作和未指定音轨不变。
-【声音规则】明确台词开始时间、说话角色、画内/画外关系和跨 Shot 延续；不要添加未要求的 BGM。
+subject_definitions: <Video 1> 是续接来源视频；<Subject 1> 是原视频结尾仍在场的主体。
+
+summary: [video continuation] The target video continues from the final valid state of <Video 1>.
+
+retention_analysis: <Video 1> (final state, camera and spatial continuity): fully_preserved - ...
+
+detailed_description: 从 <Video 1> 的最后有效状态开始，不重复已经完成的动作；新动作从现有姿态、镜头、光线和声音自然展开。
+
+overall_soundscape: ...
+
+non_diegetic_music: ...
 ```
 
-## 8. 高精度多项编辑
-
-用编号列出修改项，避免长段落混淆：
+## 8. 音频替换与参考
 
 ```text
-【修改项】
-1. 将……替换为……。
-2. 删除……。
-3. 在画面左侧增加……，与原动作和光线匹配。
-4. 将结尾台词改为：“……”。
-【保持项】保持原视频的……。
-【禁止误改】不改变未列出的……。
+subject_definitions: <Video 1> 是原视频；<Audio 1> 是完整/片段音频复用来源，或仅作为音色、节奏参考。
+
+summary: [video editing + audio reuse] ... 或 [video editing + audio reference] ...
+
+retention_analysis: <Audio 1>: fully_copy / partially_copy / reference - 明确复制或参考的时间段、轨道和内容。
+
+detailed_description: 明确说话人、台词原文、画内/画外关系、开始时间、口型和跨镜连续性；不要把音色参考误写成原始信号复制。
+
+overall_soundscape: ...
+
+non_diegetic_music: ...
 ```
+
+## 9. 复杂多镜头通用约束
+
+每个 Shot 至少包含：景别、主体位置、当前状态、动作、镜头运动、切换方式、台词/声音和与前后 Shot 的连续性。单一 Shot 不堆叠互相独立的主要动作；动作必须有可观察的起始状态和结束状态。
