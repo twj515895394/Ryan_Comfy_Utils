@@ -1,0 +1,9 @@
+# Optional dependencies for the Transformers backend of Ryan Local Multimodal Chat.
+# The GGUF + mmproj backend uses an external official llama-server binary and
+# does not require llama-cpp-python.
+transformers>=4.57.1
+accelerate>=1.0.0
+torchvision
+
+# Optional: install separately only when transformers_quantization is 4bit/8bit.
+# bitsandbytes
