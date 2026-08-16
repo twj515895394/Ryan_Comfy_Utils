@@ -1,6 +1,7 @@
 from .ryan_comfy_utils.nodes.workflow_agent_node import RyanWorkflowAgent
-from .ryan_comfy_utils.nodes.artifact_selector_node import RyanArtifactSelector
+from .ryan_comfy_utils.nodes.creative_text_selector_node import RyanCreativeTextSelector
 from .ryan_comfy_utils.workflow_agent import routes as _workflow_agent_routes
+from .ryan_comfy_utils.creative_workspace import routes as _creative_workspace_routes
 
 from .ryan_comfy_utils.nodes.acp_nodes import (
     RyanACPImageAnalyzeAgent,
@@ -28,7 +29,7 @@ NODE_CLASS_MAPPINGS = {
     "Ryan ACP Universal Agent": RyanACPUniversalAgent,
     "Ryan ACP Image Prompt Agent": RyanACPImagePromptAgent,
     "Ryan Workflow Agent": RyanWorkflowAgent,
-    "Ryan Artifact Selector": RyanArtifactSelector,
+    "Ryan Creative Text Selector": RyanCreativeTextSelector,
 
     "Ryan ACP Image Analyze Agent": RyanACPImageAnalyzeAgent,
     "Ryan ACP Video Prompt Agent": RyanACPVideoPromptAgent,
@@ -51,7 +52,7 @@ NODE_CLASS_MAPPINGS = {
 
 NODE_DISPLAY_NAME_MAPPINGS = {
     "Ryan Workflow Agent": "Ryan Workflow Agent",
-    "Ryan Artifact Selector": "Ryan Artifact Selector",
+    "Ryan Creative Text Selector": "Ryan Creative Text Selector",
 
     "Ryan ACP Universal Agent": "Ryan ACP Universal Agent",
     "Ryan ACP Image Prompt Agent": "Ryan Image Prompt Agent",
@@ -78,7 +79,6 @@ __all__ = ["NODE_CLASS_MAPPINGS", "NODE_DISPLAY_NAME_MAPPINGS", "WEB_DIRECTORY"]
 
 import sys
 
-# === 节点加载醒目提示（便于确认是否成功加载）===
 def _safe_print(text):
     try:
         print(text)
@@ -89,10 +89,9 @@ def _safe_print(text):
             pass
 
 _safe_print("\n" + "=" * 60)
-_safe_print("🚀 Ryan_Comfy_Utils 自定义节点包加载完成")
+_safe_print("Ryan_Comfy_Utils custom nodes loaded")
 _safe_print("-" * 60)
 for node_id in sorted(NODE_CLASS_MAPPINGS.keys()):
     display_name = NODE_DISPLAY_NAME_MAPPINGS.get(node_id, node_id)
-    _safe_print(f"  ✓ {display_name}")
+    _safe_print(f"  * {display_name}")
 _safe_print("=" * 60 + "\n")
-

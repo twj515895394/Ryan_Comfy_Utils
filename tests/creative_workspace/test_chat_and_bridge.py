@@ -1,0 +1,76 @@
+import tempfile
+import unittest
+from pathlib import Path
+
+from ryan_comfy_utils.creative_workspace.asset_bridge import ComfyTVAssetBridge
+from ryan_comfy_utils.creative_workspace.chat_service import CreativeChatService
+from ryan_comfy_utils.creative_workspace.project_repository import CreativeProjectRepository
+from ryan_comfy_utils.nodes.creative_text_selector_node import RyanCreativeTextSelector
+
+
+class FakeRunner:
+    def __init__(self, text: str):
+        self.text = text
+        self.stopped = False
+
+    def run(self, **kwargs):
+        yield {"type": "delta", "text": self.text[:10]}
+        yield {"type": "delta", "text": self.text[10:]}
+        yield {"type": "end"}
+
+    def stop(self):
+        self.stopped = True
+
+
+class TestChatAndBridge(unittest.TestCase):
+    def test_discuss_uses_current_thread_and_fake_runner(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = CreativeProjectRepository(Path(tmp) / "ryan_creative_workspace")
+            project = repo.create_project("chat")
+            pid = project["project_id"]
+            export = (
+                "```ryan-stage-export\n"
+                '{"stage_id":"creative","canon_markdown":"# Story\\n","deliverables":[]}\n'
+                "```"
+            )
+            chat = CreativeChatService(repo, rpc_runner=FakeRunner(export))
+            result = chat.discuss(
+                project_id=pid,
+                stage_id="creative",
+                message="写一个雨夜故事",
+            )
+            self.assertEqual(result["status"], "complete")
+            self.assertIn("ryan-stage-export", result["text"])
+            self.assertTrue(result["ready"]["ready"])
+            records = repo.read_thread_records(pid, "creative", result["thread_id"])
+            roles = [r["role"] for r in records]
+            self.assertEqual(roles[-2:], ["user", "assistant"])
+
+    def test_asset_bridge_unavailable_lists_empty_and_local_ref(self):
+        bridge = ComfyTVAssetBridge(
+            http_json=lambda *a, **k: (_ for _ in ()).throw(ConnectionError("down"))
+        )
+        self.assertFalse(bridge.available())
+        self.assertEqual(bridge.list_assets(), [])
+        ref = bridge.make_local_ref(__file__, media_type="image", display_name="x")
+        compiled = bridge.compile_refs([ref])
+        self.assertIn("ASSET image", compiled.text)
+        self.assertTrue(compiled.attachment_paths)
+
+    def test_artifact_selector_module_removed_and_text_selector_exists(self):
+        root = Path(__file__).resolve().parents[2]
+        self.assertFalse((root / "ryan_comfy_utils/nodes/artifact_selector_node.py").is_file())
+        self.assertFalse(
+            (root / "ryan_comfy_utils/web/workflow_agent/artifact_selector_extension.js").is_file()
+        )
+        self.assertTrue((root / "ryan_comfy_utils/nodes/creative_text_selector_node.py").is_file())
+        self.assertEqual(RyanCreativeTextSelector.RETURN_TYPES, ("STRING",))
+        # package root __init__ source no longer registers Artifact Selector
+        init_text = (root / "__init__.py").read_text(encoding="utf-8")
+        self.assertNotIn("Ryan Artifact Selector", init_text)
+        self.assertIn("Ryan Creative Text Selector", init_text)
+        self.assertNotIn("artifact_selector", init_text)
+
+
+if __name__ == "__main__":
+    unittest.main()

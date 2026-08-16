@@ -1,9 +1,8 @@
 import unittest
 
-from ryan_comfy_utils.nodes.artifact_selector_node import RyanArtifactSelector
+from ryan_comfy_utils.workflow_agent.artifacts import RyanArtifactBundle
 from ryan_comfy_utils.workflow_agent.context_select import render_context_view
 from ryan_comfy_utils.workflow_agent.models import RyanContext, RyanContextEntry
-
 
 class TestWorkflowAgentPipelineContract(unittest.TestCase):
     """用最小六阶段数据验证依据与可连接 Prompt 的边界。"""
@@ -161,34 +160,24 @@ class TestWorkflowAgentPipelineContract(unittest.TestCase):
         self.assertNotIn("中文角色参考图：", result)
         self.assertNotIn("中文视频 Prompt：", result)
 
-    def test_selector_maps_each_connectable_prompt_to_its_target(self):
+    def test_bundle_outputs_keep_target_ids_for_downstream_tools(self):
         context = self._context()
-        selector = RyanArtifactSelector()
-        self.assertEqual(
-            selector.run(context=context, selection="图像提示词", target_id="CHAR_001")["result"],
-            ("中文角色参考图：正面、侧面、背面与三种表情，保留旧帆布围裙和红色围巾。",),
-        )
-        self.assertEqual(
-            selector.run(context=context, selection="关键帧提示词", target_id="SHOT_001")["result"],
-            ("中文关键帧 Prompt：CHAR_001 位于摊位左侧，镜头保留夜市纵深与冷暖灯光。",),
-        )
-        self.assertEqual(
-            selector.run(context=context, selection="音频提示词", purpose="foley", target_id="SEG_001")["result"],
-            ("中文音频 Prompt：帆布袋摩擦、金属夹轻响，误会揭示前留出半秒静默。",),
-        )
-        self.assertEqual(
-            selector.run(context=context, selection="视频提示词", target_id="SEG_001")["result"],
-            (
-                "中文视频 Prompt：先保持站位，再完成递袋、停顿、抬眼反应；镜头轻微推进。"
-                "audio_sync：帆布袋摩擦与金属夹轻响跟随递袋，误会揭示前保留半秒静默。",
-            ),
-        )
+        production = next(e for e in context.entries if e.kind == "production.design")
+        bundle = RyanArtifactBundle.from_dict(production.metadata["artifact_bundle"])
+        image = next(o for o in bundle.outputs if "CHAR_001" in (o.target_ids or []))
+        self.assertIn("角色参考图", image.text)
+        video_entry = next(e for e in context.entries if e.kind == "video.prompts")
+        video_bundle = RyanArtifactBundle.from_dict(video_entry.metadata["artifact_bundle"])
+        video = next(o for o in video_bundle.outputs if "SEG_001" in (o.target_ids or []))
+        self.assertIn("audio_sync", video.text)
+        other = next(o for o in video_bundle.outputs if "SEG_002" in (o.target_ids or []))
+        self.assertIn("不应被 SEG_001", other.text)
 
-    def test_script_stage_has_no_prompt_candidate_and_target_selection_is_exact(self):
+    def test_script_stage_has_no_connectable_prompt_outputs(self):
         context = self._context()
-        selector = RyanArtifactSelector()
-        self.assertEqual(selector.run(context=context, selection="视频提示词", target_id="SEG_999")["result"], ("",))
-        self.assertEqual(selector.run(context=context, source_agent="剧本导演", selection="视频提示词")["result"], ("",))
+        script = next(e for e in context.entries if e.kind == "script.direction")
+        bundle = RyanArtifactBundle.from_dict(script.metadata["artifact_bundle"])
+        self.assertEqual(bundle.outputs, [])
 
 
 if __name__ == "__main__":

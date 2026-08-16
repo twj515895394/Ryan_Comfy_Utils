@@ -1,6 +1,5 @@
 import { api } from "../../../../scripts/api.js";
 import "./node_extension.js";
-import "./artifact_selector_extension.js";
 import WorkflowAgentApi from "./api_client.js";
 import AgentStateStore from "./state_store.js";
 import PanelManager from "./panel_manager.js";

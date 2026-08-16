@@ -1,7 +1,6 @@
 import unittest
 import tempfile
 from pathlib import Path
-from ryan_comfy_utils.nodes.artifact_selector_node import RyanArtifactSelector
 from unittest.mock import patch
 
 import numpy as np
@@ -17,8 +16,6 @@ def node_result(value):
 
 
 class TestWorkflowAgentNode(unittest.TestCase):
-    def _run(self, **kwargs):
-        return RyanArtifactSelector().run(**kwargs)["result"]
 
     def test_declares_max_context_and_image_sockets_with_slot_controls(self):
         inputs = RyanWorkflowAgent.INPUT_TYPES()
@@ -85,7 +82,7 @@ class TestWorkflowAgentNode(unittest.TestCase):
         self.assertEqual(session_dir, "")
         self.assertIn('"workflow_id": "wf_node"', context_json)
 
-    def test_queue_context_feeds_selector_default_output(self):
+    def test_queue_context_preserves_upstream_entry_body(self):
         context = RyanContext(
             workflow_id="wf_selector_flow",
             entries=[
@@ -102,10 +99,7 @@ class TestWorkflowAgentNode(unittest.TestCase):
         output_context, *_ = node_result(
             RyanWorkflowAgent().run(workflow_id="wf_selector_flow", context_01=context)
         )
-        self.assertEqual(
-            self._run(context=output_context),
-            ("Upstream Canonical Design",),
-        )
+        self.assertEqual(output_context.entries[0].content, "Upstream Canonical Design")
     def test_queue_exposes_structured_prompt_outputs(self):
         with tempfile.TemporaryDirectory() as tmp:
             repository = WorkflowAgentRepository(Path(tmp) / "acp_workspace")
