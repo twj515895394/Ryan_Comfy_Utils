@@ -1,11 +1,13 @@
 /**
- * Ryan Creative Workspace UI shell (TE_MAN-like floating panel).
- * Visual polish is intentionally minimal; browser QA is manual.
+ * Ryan Creative Workspace UI shell.
+ * Entry must remain visible on modern ComfyUI topbar (no .comfy-menu).
  */
 import { app } from "../../../../scripts/app.js";
 import { api } from "../../../../scripts/api.js";
 
 const PANEL_ID = "ryan-creative-workspace-panel";
+const TOGGLE_ID = "ryan-creative-workspace-toggle";
+const STYLE_ID = "ryan-cw-styles";
 
 function el(tag, attrs = {}, children = []) {
   const node = document.createElement(tag);
@@ -14,7 +16,8 @@ function el(tag, attrs = {}, children = []) {
     else if (key === "text") node.textContent = value;
     else if (key.startsWith("on") && typeof value === "function") {
       node.addEventListener(key.slice(2).toLowerCase(), value);
-    } else if (value != null) node.setAttribute(key, String(value));
+    } else if (value === true) node.setAttribute(key, "");
+    else if (value != null && value !== false) node.setAttribute(key, String(value));
   }
   for (const child of children) {
     if (child == null) continue;
@@ -29,42 +32,64 @@ async function apiJson(path, options = {}) {
     headers: options.body ? { "Content-Type": "application/json" } : undefined,
     body: options.body ? JSON.stringify(options.body) : undefined,
   });
-  const data = await response.json();
-  if (!response.ok || data.status === "error") {
-    throw new Error(data.error || `HTTP ${response.status}`);
+  let data = null;
+  try {
+    data = await response.json();
+  } catch (_err) {
+    data = null;
+  }
+  if (!response.ok || data?.status === "error") {
+    throw new Error(data?.error || `HTTP ${response.status} ${path}`);
   }
   return data;
 }
 
 function ensureStyles() {
-  if (document.getElementById("ryan-cw-styles")) return;
-  const style = el("style", { id: "ryan-cw-styles" });
+  if (document.getElementById(STYLE_ID)) return;
+  const style = el("style", { id: STYLE_ID });
   style.textContent = `
-  #${PANEL_ID} {
-    position: fixed; right: 24px; top: 72px; width: 420px; max-height: 80vh;
-    z-index: 10050; background: #1e1e1e; color: #f0f0f0; border: 1px solid #444;
-    border-radius: 10px; box-shadow: 0 12px 40px rgba(0,0,0,.45);
-    display: flex; flex-direction: column; font: 13px/1.4 sans-serif;
+  #${TOGGLE_ID} {
+    position: fixed;
+    top: 10px;
+    right: 280px;
+    z-index: 10060;
+    height: 34px;
+    padding: 0 12px;
+    border-radius: 8px;
+    border: 1px solid rgba(255,255,255,.18);
+    background: linear-gradient(180deg, #3a4a6a 0%, #2a3550 100%);
+    color: #f3f6ff;
+    font: 600 12px/34px system-ui, sans-serif;
+    cursor: pointer;
+    box-shadow: 0 6px 18px rgba(0,0,0,.35);
   }
-  #${PANEL_ID}.hidden { display: none; }
+  #${TOGGLE_ID}:hover { filter: brightness(1.08); }
+  #${PANEL_ID} {
+    position: fixed; right: 24px; top: 56px; width: min(440px, calc(100vw - 24px)); max-height: calc(100vh - 72px);
+    z-index: 10055; background: #1e1e1e; color: #f0f0f0; border: 1px solid #444;
+    border-radius: 10px; box-shadow: 0 12px 40px rgba(0,0,0,.45);
+    display: flex; flex-direction: column; font: 13px/1.4 system-ui, sans-serif;
+  }
+  #${PANEL_ID}.hidden { display: none !important; }
   #${PANEL_ID} .hdr {
     display:flex; align-items:center; gap:8px; padding:10px 12px;
     border-bottom:1px solid #333; cursor: move; user-select:none;
   }
   #${PANEL_ID} .hdr strong { flex:1; }
   #${PANEL_ID} .body { padding:10px 12px; overflow:auto; flex:1; min-height: 180px; }
-  #${PANEL_ID} .row { display:flex; gap:6px; margin:6px 0; flex-wrap:wrap; }
+  #${PANEL_ID} .row { display:flex; gap:6px; margin:6px 0; flex-wrap:wrap; align-items:center; }
   #${PANEL_ID} button, #${PANEL_ID} select, #${PANEL_ID} input, #${PANEL_ID} textarea {
     background:#2a2a2a; color:#eee; border:1px solid #555; border-radius:6px; padding:6px 8px;
   }
-  #${PANEL_ID} textarea { width:100%; min-height:72px; resize:vertical; }
+  #${PANEL_ID} textarea { width:100%; min-height:72px; resize:vertical; box-sizing:border-box; }
   #${PANEL_ID} .msg { white-space:pre-wrap; border-left:3px solid #555; padding:4px 8px; margin:6px 0; }
   #${PANEL_ID} .msg.user { border-color:#4a9; }
   #${PANEL_ID} .msg.assistant { border-color:#59f; }
-  #${PANEL_ID} .muted { opacity:.7; font-size:12px; }
+  #${PANEL_ID} .muted { opacity:.75; font-size:12px; }
   #${PANEL_ID} .stage { padding:4px 6px; border-radius:4px; border:1px solid #444; cursor:pointer; }
   #${PANEL_ID} .stage.active { border-color:#6af; background:#243044; }
   #${PANEL_ID} .stage.STALE { outline:1px solid #c80; }
+  #${PANEL_ID} .err { color:#f88; }
   `;
   document.head.appendChild(style);
 }
@@ -77,10 +102,12 @@ class CreativeWorkspacePanel {
     this.projects = [];
     this.stages = [];
     this.root = null;
+    this._dragBound = false;
   }
 
   mount() {
     ensureStyles();
+    this.ensureToggle();
     if (document.getElementById(PANEL_ID)) {
       this.root = document.getElementById(PANEL_ID);
       return;
@@ -88,13 +115,37 @@ class CreativeWorkspacePanel {
     this.root = el("div", { id: PANEL_ID, className: "hidden" });
     document.body.appendChild(this.root);
     this.render();
-    this.makeDraggable();
+    this.bindDrag();
+  }
+
+  ensureToggle() {
+    ensureStyles();
+    let btn = document.getElementById(TOGGLE_ID);
+    if (btn) return btn;
+    btn = el("button", {
+      id: TOGGLE_ID,
+      type: "button",
+      text: "Ryan 构想台",
+      title: "打开/关闭 Ryan Creative Workspace",
+      onClick: () => this.toggle(),
+    });
+    document.body.appendChild(btn);
+    // Keep clear of top-right cluster on wide screens; fallback leftward on narrow.
+    const place = () => {
+      const w = window.innerWidth || 1200;
+      if (w < 1100) btn.style.right = "12px";
+      else if (w < 1400) btn.style.right = "180px";
+      else btn.style.right = "280px";
+    };
+    place();
+    window.addEventListener("resize", place);
+    return btn;
   }
 
   show() {
     this.mount();
     this.root.classList.remove("hidden");
-    this.refresh().catch((err) => this.setStatus(String(err)));
+    this.refresh().catch((err) => this.setStatus(String(err?.message || err), true));
   }
 
   hide() {
@@ -107,9 +158,11 @@ class CreativeWorkspacePanel {
     else this.hide();
   }
 
-  setStatus(text) {
+  setStatus(text, isError = false) {
     const node = this.root?.querySelector("[data-status]");
-    if (node) node.textContent = text || "";
+    if (!node) return;
+    node.textContent = text || "";
+    node.classList.toggle("err", Boolean(isError));
   }
 
   async refresh() {
@@ -133,8 +186,11 @@ class CreativeWorkspacePanel {
       if (!this.stages.find((s) => s.stage_id === this.stageId) && this.stages[0]) {
         this.stageId = this.stages[0].stage_id;
       }
+      const current = this.stages.find((s) => s.stage_id === this.stageId);
+      if (current?.current_thread_id) this.threadId = current.current_thread_id;
     }
     this.render();
+    this.setStatus("就绪");
   }
 
   async resetWorkspace() {
@@ -173,7 +229,7 @@ class CreativeWorkspacePanel {
       this.stages = stages.stages || [];
       this.renderStagesOnly();
     } catch (err) {
-      this.setStatus(String(err.message || err));
+      this.setStatus(String(err.message || err), true);
     }
   }
 
@@ -191,14 +247,14 @@ class CreativeWorkspacePanel {
       this.setStatus(`已锁定 r${result.stage?.revision || "?"}`);
       await this.refresh();
     } catch (err) {
-      this.setStatus(String(err.message || err));
+      this.setStatus(String(err.message || err), true);
     }
   }
 
   appendMessage(role, text) {
     const box = this.root.querySelector("[data-messages]");
     if (!box) return;
-    box.appendChild(el("div", { className: `msg ${role}`, text }));
+    box.appendChild(el("div", { className: `msg ${role}`, text: text || "" }));
     box.scrollTop = box.scrollHeight;
   }
 
@@ -222,40 +278,59 @@ class CreativeWorkspacePanel {
 
   render() {
     if (!this.root) return;
-    const projectOptions = this.projects.map((p) =>
-      el("option", {
+    const projectOptions = this.projects.map((p) => {
+      const opt = el("option", {
         value: p.project_id,
         text: `${p.name || p.project_id}`,
-        ...(p.project_id === this.projectId ? { selected: "selected" } : {}),
-      })
-    );
+      });
+      if (p.project_id === this.projectId) opt.selected = true;
+      return opt;
+    });
     this.root.innerHTML = "";
     this.root.append(
       el("div", { className: "hdr" }, [
         el("strong", { text: "Ryan 构想台" }),
-        el("button", { text: "刷新", onClick: () => this.refresh().catch((e) => this.setStatus(String(e))) }),
-        el("button", { text: "关闭", onClick: () => this.hide() }),
+        el("button", {
+          type: "button",
+          text: "刷新",
+          onClick: () => this.refresh().catch((e) => this.setStatus(String(e.message || e), true)),
+        }),
+        el("button", { type: "button", text: "关闭", onClick: () => this.hide() }),
       ]),
       el("div", { className: "body" }, [
         el("div", { className: "row" }, [
-          el("select", {
-            "data-project": "1",
-            onChange: async (ev) => {
-              this.projectId = ev.target.value;
-              await apiJson(`/ryan/creative/projects/${encodeURIComponent(this.projectId)}`);
-              await this.refresh();
+          el(
+            "select",
+            {
+              "data-project": "1",
+              onChange: async (ev) => {
+                this.projectId = ev.target.value;
+                try {
+                  await apiJson(`/ryan/creative/projects/${encodeURIComponent(this.projectId)}`);
+                  await this.refresh();
+                } catch (err) {
+                  this.setStatus(String(err.message || err), true);
+                }
+              },
             },
-          }, projectOptions),
+            projectOptions
+          ),
           el("button", {
+            type: "button",
             text: "新建",
             onClick: async () => {
-              await apiJson("/ryan/creative/projects", { method: "POST", body: { name: "工作区" } });
-              await this.refresh();
+              try {
+                await apiJson("/ryan/creative/projects", { method: "POST", body: { name: "工作区" } });
+                await this.refresh();
+              } catch (err) {
+                this.setStatus(String(err.message || err), true);
+              }
             },
           }),
           el("button", {
+            type: "button",
             text: "重置工作区",
-            onClick: () => this.resetWorkspace().catch((e) => this.setStatus(String(e))),
+            onClick: () => this.resetWorkspace().catch((e) => this.setStatus(String(e.message || e), true)),
           }),
         ]),
         el("div", { className: "muted", text: `project: ${this.projectId || "-"}` }),
@@ -264,24 +339,26 @@ class CreativeWorkspacePanel {
         el("div", { "data-messages": "1" }),
         el("textarea", { "data-input": "1", placeholder: "描述你的要求…" }),
         el("div", { className: "row" }, [
-          el("button", { text: "发送", onClick: () => this.send() }),
-          el("button", { text: "确认当前阶段", onClick: () => this.confirm("commit") }),
-          el("button", { text: "确认当前草稿", onClick: () => this.confirm("draft") }),
+          el("button", { type: "button", text: "发送", onClick: () => this.send() }),
+          el("button", { type: "button", text: "确认当前阶段", onClick: () => this.confirm("commit") }),
+          el("button", { type: "button", text: "确认当前草稿", onClick: () => this.confirm("draft") }),
         ]),
       ])
     );
     this.renderStagesOnly();
   }
 
-  makeDraggable() {
-    const hdr = () => this.root.querySelector(".hdr");
+  bindDrag() {
+    if (this._dragBound || !this.root) return;
+    this._dragBound = true;
     let sx = 0;
     let sy = 0;
     let ox = 0;
     let oy = 0;
     let dragging = false;
     this.root.addEventListener("mousedown", (ev) => {
-      if (!hdr()?.contains(ev.target)) return;
+      const hdr = this.root.querySelector(".hdr");
+      if (!hdr?.contains(ev.target)) return;
       dragging = true;
       sx = ev.clientX;
       sy = ev.clientY;
@@ -304,23 +381,23 @@ class CreativeWorkspacePanel {
 
 const panel = new CreativeWorkspacePanel();
 
+function boot() {
+  try {
+    panel.mount();
+    console.info("[Ryan Creative Workspace] UI mounted (#ryan-creative-workspace-toggle)");
+  } catch (err) {
+    console.error("[Ryan Creative Workspace] mount failed", err);
+  }
+}
+
 app.registerExtension({
   name: "Ryan.CreativeWorkspace",
   async setup() {
-    const btn = el("button", {
-      text: "Ryan 构想台",
-      title: "打开 Ryan Creative Workspace",
-      onClick: () => panel.toggle(),
-    });
-    btn.style.cssText = "margin-left:8px;";
-    const host =
-      document.querySelector(".comfy-menu") ||
-      document.querySelector(".comfyui-menu") ||
-      document.body;
-    host.appendChild(btn);
-
-    // default project id snapshot helper for text selector widgets
-    app.canvas?.canvas?.addEventListener?.("drop", () => {});
+    boot();
+  },
+  async init() {
+    // older/newer frontends may call init instead of/in addition to setup
+    boot();
   },
   async nodeCreated(node) {
     if (node?.comfyClass !== "Ryan Creative Text Selector") return;
@@ -331,8 +408,17 @@ app.registerExtension({
       if (widget && current && !String(widget.value || "").trim()) {
         widget.value = current;
       }
-    } catch (_) {
-      /* offline / routes not ready */
+    } catch (_err) {
+      /* routes may be offline during graph load */
     }
   },
 });
+
+// If extension registration is delayed, still expose a global opener.
+globalThis.RyanCreativeWorkspace = panel;
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", boot, { once: true });
+} else {
+  // Defer one tick so body exists.
+  setTimeout(boot, 0);
+}
