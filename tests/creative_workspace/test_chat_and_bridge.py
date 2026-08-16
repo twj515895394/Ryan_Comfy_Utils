@@ -33,7 +33,12 @@ class TestChatAndBridge(unittest.TestCase):
                 '{"stage_id":"creative","canon_markdown":"# Story\\n","deliverables":[]}\n'
                 "```"
             )
-            chat = CreativeChatService(repo, rpc_runner=FakeRunner(export))
+            published = []
+            chat = CreativeChatService(
+                repo,
+                rpc_runner=FakeRunner(export),
+                event_publisher=published.append,
+            )
             result = chat.discuss(
                 project_id=pid,
                 stage_id="creative",
@@ -42,10 +47,16 @@ class TestChatAndBridge(unittest.TestCase):
             self.assertEqual(result["status"], "complete")
             self.assertIn("ryan-stage-export", result["text"])
             self.assertTrue(result["ready"]["ready"])
+            types = [e.get("type") for e in published]
+            self.assertIn("start", types)
+            self.assertIn("delta", types)
+            self.assertIn("end", types)
             records = repo.read_thread_records(pid, "creative", result["thread_id"])
             roles = [r["role"] for r in records]
             self.assertEqual(roles[-2:], ["user", "assistant"])
 
+            # messages API shape via repository records
+            self.assertGreaterEqual(len(records), 2)
     def test_asset_bridge_unavailable_lists_empty_and_local_ref(self):
         bridge = ComfyTVAssetBridge(
             http_json=lambda *a, **k: (_ for _ in ()).throw(ConnectionError("down"))

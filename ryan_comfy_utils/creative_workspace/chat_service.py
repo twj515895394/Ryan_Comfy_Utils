@@ -120,12 +120,23 @@ class CreativeChatService:
             },
         )
         self.stage_service.mark_draft(project_id, stage)
-
+        self._publish(
+            {
+                "type": "start",
+                "project_id": project_id,
+                "stage_id": stage,
+                "thread_id": tid,
+                "request_id": request_id,
+                "message_id": message_id,
+                "user_message": message.strip(),
+                "skill_id": resolved_skill,
+            },
+            events,
+        )
         key = (project_id, tid)
         runner = self._runner()
         with self._lock:
             self._active[key] = _Active(request_id=request_id, runner=runner)
-
         generated = ""
         status = "complete"
         error = ""

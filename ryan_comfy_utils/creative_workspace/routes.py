@@ -1,6 +1,7 @@
 """Creative Workspace HTTP API；无 ComfyUI 时可安全导入。"""
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
 from typing import Any, Mapping
 
@@ -56,13 +57,30 @@ async def _json_body(request: Any) -> dict[str, Any]:
 def build_services(
     repository: CreativeProjectRepository | None = None,
     rpc_runner: Any | None = None,
+    *,
+    event_publisher: Any | None = None,
+    prompt_server: Any | None = None,
 ) -> dict[str, Any]:
     repo = repository or CreativeProjectRepository()
-    chat = CreativeChatService(repo, rpc_runner=rpc_runner)
-    # wire commit runner for default confirm
+    publisher = event_publisher
+    if publisher is None and prompt_server is not None:
+        send_sync = getattr(prompt_server, "send_sync", None)
+        if callable(send_sync):
+            def publish_creative_event(event: dict[str, Any]) -> None:
+                payload = dict(event)
+                payload.setdefault("channel", "creative")
+                try:
+                    send_sync("ryan_creative_event", payload, getattr(prompt_server, "client_id", None))
+                except TypeError:
+                    send_sync("ryan_creative_event", payload)
+
+            publisher = publish_creative_event
+    chat = CreativeChatService(repo, rpc_runner=rpc_runner, event_publisher=publisher)
     stage = CreativeStageService(repo, commit_runner=chat.commit_text_via_runner)
     chat.stage_service = stage
-    bridge = ComfyTVAssetBridge(output_root=repo.root.parent if repo.root.name == "ryan_creative_workspace" else None)
+    bridge = ComfyTVAssetBridge(
+        output_root=repo.root.parent if repo.root.name == "ryan_creative_workspace" else None
+    )
     return {
         "repository": repo,
         "chat_service": chat,
@@ -77,23 +95,30 @@ def register_routes(
     repository: CreativeProjectRepository | None = None,
     rpc_runner: Any | None = None,
 ) -> dict[str, Any]:
-    services = build_services(repository=repository, rpc_runner=rpc_runner)
-    repo: CreativeProjectRepository = services["repository"]
-    chat: CreativeChatService = services["chat_service"]
-    stage_service: CreativeStageService = services["stage_service"]
-    bridge: ComfyTVAssetBridge = services["asset_bridge"]
-
-    if web is None:
-        return services
-
+    prompt_server = None
     app_routes = routes
     if app_routes is None:
         try:
             from server import PromptServer  # type: ignore
 
-            app_routes = PromptServer.instance.routes
+            prompt_server = getattr(PromptServer, "instance", None)
+            app_routes = getattr(prompt_server, "routes", None) if prompt_server is not None else None
         except Exception:
-            return services
+            prompt_server = None
+            app_routes = None
+
+    services = build_services(
+        repository=repository,
+        rpc_runner=rpc_runner,
+        prompt_server=prompt_server,
+    )
+    repo: CreativeProjectRepository = services["repository"]
+    chat: CreativeChatService = services["chat_service"]
+    stage_service: CreativeStageService = services["stage_service"]
+    bridge: ComfyTVAssetBridge = services["asset_bridge"]
+
+    if web is None or app_routes is None:
+        return services
 
     @app_routes.get("/ryan/creative/projects")
     async def list_projects(request: Any) -> Any:
@@ -192,15 +217,19 @@ def register_routes(
     async def creative_chat(request: Any) -> Any:
         try:
             body = await _json_body(request)
-            result = chat.discuss(
-                project_id=str(body.get("project_id") or ""),
-                stage_id=str(body.get("stage_id") or ""),
-                message=str(body.get("message") or ""),
-                thread_id=str(body.get("thread_id") or ""),
-                skill_id=str(body.get("skill_id") or ""),
-                skill_scope=str(body.get("skill_scope") or "stage"),
-                asset_ref_ids=list(body.get("asset_ref_ids") or []),
-            )
+
+            def _run() -> dict[str, Any]:
+                return chat.discuss(
+                    project_id=str(body.get("project_id") or ""),
+                    stage_id=str(body.get("stage_id") or ""),
+                    message=str(body.get("message") or ""),
+                    thread_id=str(body.get("thread_id") or ""),
+                    skill_id=str(body.get("skill_id") or ""),
+                    skill_scope=str(body.get("skill_scope") or "stage"),
+                    asset_ref_ids=list(body.get("asset_ref_ids") or []),
+                )
+
+            result = await asyncio.to_thread(_run)
             return _response({"status": "ok", **result})
         except Exception as exc:  # noqa: BLE001
             return _error(exc, _status_for(exc))
@@ -214,6 +243,38 @@ def register_routes(
                 thread_id=str(body.get("thread_id") or ""),
             )
             return _response({"status": "ok", **result})
+        except Exception as exc:  # noqa: BLE001
+            return _error(exc, _status_for(exc))
+
+    @app_routes.get("/ryan/creative/projects/{project_id}/stages/{stage_id}/threads/{thread_id}/messages")
+    async def thread_messages(request: Any) -> Any:
+        try:
+            project_id = request.match_info["project_id"]
+            stage_id = request.match_info["stage_id"]
+            thread_id = request.match_info["thread_id"]
+            records = repo.read_thread_records(project_id, stage_id, thread_id)
+            messages = [
+                {
+                    "role": r.get("role") or "assistant",
+                    "content": r.get("content") or "",
+                    "status": r.get("status") or "",
+                    "message_id": r.get("message_id") or "",
+                    "request_id": r.get("request_id") or "",
+                    "error": r.get("error") or "",
+                    "skill_id": r.get("skill_id") or "",
+                }
+                for r in records
+                if r.get("role") in {"user", "assistant", "system"}
+            ]
+            return _response(
+                {
+                    "status": "ok",
+                    "project_id": project_id,
+                    "stage_id": stage_id,
+                    "thread_id": thread_id,
+                    "messages": messages,
+                }
+            )
         except Exception as exc:  # noqa: BLE001
             return _error(exc, _status_for(exc))
 
