@@ -106,8 +106,11 @@ export class MessageList {
     const messages = this.root.querySelectorAll(".ryan-message");
     const last = messages[messages.length - 1];
     if (!last || !last.classList.contains("ryan-message--assistant")) return this.append(message);
+    last.classList.toggle("ryan-message--pending", Boolean(message.pending));
     const body = last.querySelector(".ryan-message__body");
+    body.removeAttribute("aria-busy");
     body.replaceChildren(renderMarkdown(message.content || message.text || ""));
+    last.querySelector(".ryan-message__error")?.remove();
     if (message.error) last.append(el("div", "ryan-message__error", String(message.error)));
   }
 

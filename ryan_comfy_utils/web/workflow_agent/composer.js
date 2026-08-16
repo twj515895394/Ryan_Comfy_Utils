@@ -40,13 +40,22 @@ export class Composer {
   focus() { this.textarea.focus(); }
   resize() { this.textarea.style.height = "auto"; this.textarea.style.height = `${Math.min(this.textarea.scrollHeight, 180)}px`; }
 
-  setGenerating(busy, status = "generating") {
-    const generating = status === "generating";
-    this.submitButton.textContent = generating ? "■" : "…";
-    this.submitButton.title = generating ? "停止生成" : "正在发送";
+  setGenerating(busy, status = "idle") {
+    const generating = Boolean(busy) && status === "generating";
+    const submitting = Boolean(busy) && status === "submitting";
+    if (generating) {
+      this.submitButton.textContent = "■";
+      this.submitButton.title = "停止生成";
+    } else if (submitting) {
+      this.submitButton.textContent = "…";
+      this.submitButton.title = "正在发送";
+    } else {
+      this.submitButton.textContent = "↑";
+      this.submitButton.title = "发送消息";
+    }
     this.submitButton.classList.toggle("is-stop", generating);
     this.submitButton.classList.toggle("is-busy", Boolean(busy));
-    this.textarea.disabled = Boolean(busy);
+    this.textarea.disabled = Boolean(busy) && !generating;
   }
 
   async submit() {

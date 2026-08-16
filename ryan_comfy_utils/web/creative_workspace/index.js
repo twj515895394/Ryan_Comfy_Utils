@@ -10,7 +10,7 @@ import { installStyles as installAgentStyles } from "../workflow_agent/styles.js
 
 const PANEL_ID = "ryan-creative-workspace-panel";
 const TOGGLE_ID = "ryan-creative-workspace-toggle";
-const STYLE_ID = "ryan-cw-ui-styles";
+const STYLE_ID = "ryan-cw-ui-styles-v3";
 
 function el(tag, attrs = {}, children = []) {
   const node = document.createElement(tag);
@@ -64,7 +64,8 @@ function findToolbarAnchor() {
 
 function ensureStyles() {
   installAgentStyles();
-  if (document.getElementById(STYLE_ID)) return;
+  // Always rewrite so hard-refresh isn't required after UI CSS patches.
+  document.getElementById(STYLE_ID)?.remove();
   const style = el("style", { id: STYLE_ID });
   style.textContent = `
   #${TOGGLE_ID}{
@@ -85,7 +86,13 @@ function ensureStyles() {
     --ryan-accent:#8d9cff;
     --ryan-accent-strong:#c4cbff;
     --ryan-gold:#d6b36a;
-    position:fixed;right:18px;top:72px;width:min(980px,calc(100vw - 28px));height:min(720px,calc(100vh - 96px));
+    position:fixed;
+    right:12px;
+    top:56px;
+    bottom:12px;
+    width:min(1100px,calc(100vw - 24px));
+    height:auto;
+    max-height:none;
     z-index:10055;display:flex;flex-direction:column;overflow:hidden;color:var(--ryan-text-primary);
     font:13px/1.45 Inter,ui-sans-serif,system-ui,sans-serif;
     background:linear-gradient(180deg,rgba(28,32,40,.98),rgba(14,16,22,.98));
@@ -93,20 +100,36 @@ function ensureStyles() {
     box-shadow:0 24px 64px rgba(0,0,0,.48),0 0 0 1px rgba(255,255,255,.03) inset;
   }
   #${PANEL_ID}.hidden{display:none!important}
-  #${PANEL_ID} .cw-header{display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid var(--ryan-border);cursor:move;user-select:none;background:linear-gradient(180deg,rgba(214,179,106,.08),transparent)}
+  #${PANEL_ID} .cw-header{display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid var(--ryan-border);cursor:move;user-select:none;background:linear-gradient(180deg,rgba(214,179,106,.08),transparent);flex:0 0 auto}
   #${PANEL_ID} .cw-header h1{margin:0;font-size:15px;font-weight:650;letter-spacing:.01em}
   #${PANEL_ID} .cw-header .sub{color:var(--ryan-text-secondary);font-size:11px}
   #${PANEL_ID} .cw-header .spacer{flex:1}
-  #${PANEL_ID} .cw-body{display:grid;grid-template-columns:240px 1fr;min-height:0;flex:1}
+  #${PANEL_ID} .cw-body{display:grid;grid-template-columns:240px 1fr;min-height:0;flex:1 1 auto}
   #${PANEL_ID} .cw-side{display:flex;flex-direction:column;gap:10px;min-height:0;padding:12px;border-right:1px solid var(--ryan-border);background:rgba(0,0,0,.18);overflow:auto}
-  #${PANEL_ID} .cw-main{display:flex;flex-direction:column;min-width:0;min-height:0}
-  #${PANEL_ID} .cw-toolbar{display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:10px 12px;border-bottom:1px solid var(--ryan-border);background:rgba(255,255,255,.02)}
-  #${PANEL_ID} .cw-status{padding:0 14px 8px;color:var(--ryan-text-secondary);font-size:11px}
+  #${PANEL_ID} .cw-main{display:flex;flex-direction:column;min-width:0;min-height:0;height:100%}
+  #${PANEL_ID} .cw-toolbar{display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:10px 12px;border-bottom:1px solid var(--ryan-border);background:rgba(255,255,255,.02);flex:0 0 auto}
+  #${PANEL_ID} .cw-status{padding:0 14px 8px;color:var(--ryan-text-secondary);font-size:11px;flex:0 0 auto}
   #${PANEL_ID} .cw-status.err{color:#f0a0a0}
-  #${PANEL_ID} .cw-messages{flex:1;min-height:0;display:flex;flex-direction:column}
-  #${PANEL_ID} .cw-messages .ryan-message-list{flex:1}
-  #${PANEL_ID} .cw-composer{border-top:1px solid var(--ryan-border);background:rgba(0,0,0,.14)}
-  #${PANEL_ID} .cw-composer .ryan-composer{margin:12px}
+  #${PANEL_ID} .cw-messages{flex:1 1 auto;min-height:180px;display:flex;flex-direction:column;overflow:hidden}
+  #${PANEL_ID} .cw-messages .ryan-message-list{flex:1 1 auto;min-height:0}
+  #${PANEL_ID} .cw-composer{border-top:1px solid var(--ryan-border);background:rgba(0,0,0,.22);flex:0 0 auto;padding-bottom:4px}
+  #${PANEL_ID} .cw-composer .ryan-composer{
+    margin:12px 14px 14px;padding:12px 14px 40px;border:1px solid rgba(214,179,106,.22);
+    border-radius:16px;background:rgba(16,19,26,.95);box-shadow:inset 0 1px 0 rgba(255,255,255,.04)
+  }
+  #${PANEL_ID} .cw-composer .ryan-composer__input{
+    width:100%;min-height:72px;max-height:220px;padding-right:8px;font-size:14px;line-height:1.55
+  }
+  #${PANEL_ID} .cw-composer .ryan-composer__hint{margin-top:8px;opacity:.75}
+  #${PANEL_ID} .cw-composer .ryan-send-button{
+    right:14px;bottom:14px;width:36px;height:36px;border-radius:12px;font-size:18px;
+    background:linear-gradient(180deg,#e8c988,#c49a45);color:#1a1408;box-shadow:0 6px 16px rgba(0,0,0,.28)
+  }
+  #${PANEL_ID} .cw-composer .ryan-send-button:active{transform:scale(.96)}
+  #${PANEL_ID} .cw-composer .ryan-send-button.is-stop{background:linear-gradient(180deg,#ef8a8a,#c45a5a);color:#fff}
+  #${PANEL_ID} .cw-composer .ryan-attachment-button{
+    padding:6px 10px;border-radius:999px;border:1px solid rgba(255,255,255,.12);margin-right:6px
+  }
   #${PANEL_ID} select, #${PANEL_ID} button.cw-btn{
     background:rgba(255,255,255,.04);color:var(--ryan-text-primary);border:1px solid var(--ryan-border-strong);
     border-radius:9px;padding:6px 10px;font:inherit;cursor:pointer
@@ -121,16 +144,19 @@ function ensureStyles() {
   #${PANEL_ID} .cw-stage.active, #${PANEL_ID} .cw-thread.active{border-color:rgba(214,179,106,.55);background:rgba(214,179,106,.10)}
   #${PANEL_ID} .cw-stage.STALE{outline:1px solid rgba(232,184,106,.7)}
   #${PANEL_ID} .cw-stage small, #${PANEL_ID} .cw-thread small{display:block;color:var(--ryan-text-secondary);font-size:10px;margin-top:2px}
-  #${PANEL_ID} .cw-chips{display:flex;flex-wrap:wrap;gap:6px;padding:0 16px}
+  #${PANEL_ID} .cw-chips{display:flex;flex-wrap:wrap;gap:6px;padding:0 16px 8px;flex:0 0 auto}
   #${PANEL_ID} .cw-chip{display:inline-flex;align-items:center;gap:6px;padding:4px 8px;border-radius:999px;border:1px solid var(--ryan-border);background:rgba(255,255,255,.04);font-size:11px;color:var(--ryan-text-secondary)}
   #${PANEL_ID} .cw-chip button{border:0;background:transparent;color:inherit;cursor:pointer}
   #${PANEL_ID} .cw-pop{
-    position:absolute;left:16px;right:16px;bottom:110px;z-index:5;max-height:240px;overflow:auto;
+    position:absolute;left:16px;right:16px;bottom:110px;z-index:5;max-height:280px;overflow:auto;
     border:1px solid var(--ryan-border-strong);border-radius:12px;background:#1a1e27;box-shadow:0 16px 40px rgba(0,0,0,.4)
   }
   #${PANEL_ID} .cw-pop button{display:block;width:100%;text-align:left;padding:10px 12px;border:0;border-bottom:1px solid var(--ryan-border);background:transparent;color:var(--ryan-text-primary);cursor:pointer}
   #${PANEL_ID} .cw-pop button:hover{background:rgba(255,255,255,.04)}
   #${PANEL_ID} .cw-empty-guide{padding:28px;color:var(--ryan-text-secondary);text-align:center}
+  @media (prefers-reduced-motion: reduce){
+    #${PANEL_ID} .cw-composer .ryan-send-button{transition:none}
+  }
   `;
   document.head.appendChild(style);
 }
@@ -205,24 +231,25 @@ class CreativeWorkspaceApp {
     node.classList.toggle("err", Boolean(isError));
   }
 
-  setGenerating(busy) {
+  setGenerating(busy, status = "idle") {
     this.generating = Boolean(busy);
-    this.composer?.setGenerating(this.generating, this.generating ? "generating" : "idle");
-    this.messageList?.setBusy(false);
+    const mode = this.generating ? (status || "generating") : "idle";
+    this.composer?.setGenerating(this.generating, mode);
+    // Continuous waiting feedback while agent works.
+    this.messageList?.setBusy(this.generating, mode === "submitting" ? "submitting" : "generating");
   }
 
   onCreativeEvent(event) {
     if (!event || typeof event !== "object") return;
     if (this.projectId && event.project_id && event.project_id !== this.projectId) return;
     if (this.stageId && event.stage_id && event.stage_id !== this.stageId) return;
+    // First response may mint a thread; adopt it before filtering.
+    if (!this.threadId && event.thread_id) this.threadId = String(event.thread_id);
     if (this.threadId && event.thread_id && event.thread_id !== this.threadId) return;
     const type = String(event.type || "");
     if (type === "start") {
       this.activeRequestId = event.request_id || "";
-      this.setGenerating(true);
-      if (event.user_message) {
-        // user bubble may already exist from optimistic UI
-      }
+      this.setGenerating(true, "generating");
       this.upsertStreamingAssistant("");
       this.setStatus("生成中…");
       return;
@@ -230,18 +257,20 @@ class CreativeWorkspaceApp {
     if (type === "delta") {
       if (event.request_id && this.activeRequestId && event.request_id !== this.activeRequestId) return;
       this.activeRequestId = event.request_id || this.activeRequestId;
+      const chunk = String(event.text || event.delta || event.content || "");
       const last = this.messages[this.messages.length - 1];
       if (!last || last.role !== "assistant" || !last.streaming) {
-        this.upsertStreamingAssistant(String(event.text || ""));
+        this.upsertStreamingAssistant(chunk);
       } else {
-        last.content = `${last.content || ""}${event.text || ""}`;
+        last.pending = false;
+        last.content = `${last.content || ""}${chunk}`;
         this.messageList?.updateLast(last);
       }
       return;
     }
     if (type === "end" || type === "error") {
       if (event.request_id && this.activeRequestId && event.request_id !== this.activeRequestId) return;
-      const text = String(event.text || "");
+      const text = String(event.text || event.content || "").trim();
       const last = this.messages[this.messages.length - 1];
       if (last?.role === "assistant" && last.streaming) {
         last.streaming = false;
@@ -253,10 +282,17 @@ class CreativeWorkspaceApp {
         this.messages.push({ role: "assistant", content: text, error: event.error || "" });
         this.messageList?.append(this.messages[this.messages.length - 1]);
       }
-      this.setGenerating(false);
+      this.setGenerating(false, "idle");
       this.activeRequestId = "";
-      this.setStatus(type === "error" ? String(event.error || "生成失败") : event.ready ? "READY：可确认草稿" : "已完成");
+      this.setStatus(
+        type === "error"
+          ? String(event.error || "生成失败")
+          : event.ready
+            ? "READY：可确认草稿"
+            : "已完成"
+      );
       this.refreshStages().catch(() => {});
+      this.refreshMessages().catch(() => {});
     }
   }
 
@@ -549,18 +585,39 @@ class CreativeWorkspaceApp {
   async send(text) {
     const message = String(text || "").trim();
     if (!message || !this.projectId || this.generating) return;
+
+    if (!this.threadId) {
+      try {
+        await this.refreshThreads();
+        const cur = this.stages.find((s) => s.stage_id === this.stageId);
+        this.threadId = cur?.current_thread_id || cur?.main_thread_id || this.threadId || "";
+      } catch (_err) {
+        /* backend creates main thread */
+      }
+    }
+
     this.messages.push({ role: "user", content: message });
     this.messageList?.append(this.messages[this.messages.length - 1]);
+    this.messages.push({
+      role: "assistant",
+      content: "",
+      streaming: true,
+      pending: true,
+    });
+    this.messageList?.append(this.messages[this.messages.length - 1]);
     this.composer?.clear();
-    this.setGenerating(true);
-    this.setStatus("发送中…");
+    this.setGenerating(true, "submitting");
+    this.setStatus("正在连接 Agent…");
+
     try {
+      this.setGenerating(true, "generating");
+      this.setStatus("Agent 回复中…");
       const result = await apiJson("/ryan/creative/chat", {
         method: "POST",
         body: {
           project_id: this.projectId,
           stage_id: this.stageId,
-          thread_id: this.threadId,
+          thread_id: this.threadId || "",
           message,
           skill_id: this.skillId,
           skill_scope: "stage",
@@ -568,24 +625,68 @@ class CreativeWorkspaceApp {
         },
       });
       this.threadId = result.thread_id || this.threadId;
-      // If no WS events arrived, fall back to final text.
-      const last = this.messages[this.messages.length - 1];
-      if (!(last?.role === "assistant" && (last.content || last.streaming))) {
-        this.messages.push({ role: "assistant", content: result.text || "" });
-        this.messageList?.append(this.messages[this.messages.length - 1]);
-      } else if (last.streaming) {
-        last.streaming = false;
-        last.pending = false;
-        if (result.text) last.content = result.text;
-        this.messageList?.updateLast(last);
+      const replyText = String(result.text || result.generated || "").trim();
+      const replyError = String(result.error || "").trim();
+
+      let historyOk = false;
+      try {
+        if (this.threadId) {
+          await this.refreshMessages();
+          historyOk = this.messages.some(
+            (m) => m.role === "assistant" && String(m.content || "").trim()
+          );
+        }
+      } catch (_err) {
+        historyOk = false;
       }
-      this.setGenerating(false);
-      this.setStatus(result.ready?.ready ? "READY：可确认草稿" : "已回复");
+
+      if (!historyOk) {
+        const last = this.messages[this.messages.length - 1];
+        if (last?.role === "assistant") {
+          last.streaming = false;
+          last.pending = false;
+          last.content =
+            replyText ||
+            last.content ||
+            (replyError ? `错误：${replyError}` : "(未收到文本回复，请检查 Pi/后端日志)");
+          if (replyError) last.error = replyError;
+          this.messageList?.render(
+            this.messages.map((m) => ({ ...m, streaming: false, pending: false }))
+          );
+        } else {
+          this.messages.push({
+            role: "assistant",
+            content: replyText || (replyError ? `错误：${replyError}` : "(空回复)"),
+            error: replyError,
+          });
+          this.messageList?.render(this.messages);
+        }
+      }
+
+      this.setGenerating(false, "idle");
+      this.setStatus(
+        result.ready?.ready
+          ? "READY：可确认草稿"
+          : replyError
+            ? `失败：${replyError}`
+            : replyText
+              ? "已回复"
+              : "已结束（回复为空）",
+        Boolean(replyError)
+      );
       await this.refreshStages();
       await this.refreshThreads();
       this.renderSide();
     } catch (err) {
-      this.setGenerating(false);
+      const last = this.messages[this.messages.length - 1];
+      if (last?.role === "assistant") {
+        last.streaming = false;
+        last.pending = false;
+        last.content = last.content || "请求失败";
+        last.error = String(err.message || err);
+        this.messageList?.updateLast(last);
+      }
+      this.setGenerating(false, "idle");
       this.setStatus(String(err.message || err), true);
     }
   }
@@ -824,13 +925,19 @@ class CreativeWorkspaceApp {
       const rect = this.root.getBoundingClientRect();
       ox = rect.left;
       oy = rect.top;
+      // Switch to explicit box while dragging; keep bottom anchor for full height.
+      this.root.style.height = "auto";
+      this.root.style.bottom = "12px";
       ev.preventDefault();
     });
     window.addEventListener("mousemove", (ev) => {
       if (!dragging) return;
-      this.root.style.left = `${ox + ev.clientX - sx}px`;
-      this.root.style.top = `${oy + ev.clientY - sy}px`;
+      const nextTop = Math.max(8, oy + ev.clientY - sy);
+      this.root.style.left = `${Math.max(8, ox + ev.clientX - sx)}px`;
+      this.root.style.top = `${nextTop}px`;
       this.root.style.right = "auto";
+      this.root.style.bottom = "12px";
+      this.root.style.height = "auto";
     });
     window.addEventListener("mouseup", () => {
       dragging = false;
