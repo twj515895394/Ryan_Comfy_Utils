@@ -158,56 +158,20 @@ class CreativeWorkspaceApp {
 
   mount() {
     ensureStyles();
-    this.ensureToggle();
+    // Toggle button is owned by ryan_creative_workspace.js bootstrap.
     if (!this.root) {
       this.root = el("div", { id: PANEL_ID, className: "hidden" });
       document.body.appendChild(this.root);
       this.bindDrag();
       this.bindEvents();
+      this.renderShell();
     }
-    this.renderShell();
   }
 
   ensureToggle() {
-    ensureStyles();
-    let btn = document.getElementById(TOGGLE_ID);
-    if (!btn) {
-      btn = el("button", {
-        id: TOGGLE_ID,
-        type: "button",
-        text: "Ryan 构想台",
-        title: "打开/关闭 Ryan Creative Workspace",
-        onClick: () => this.toggle(),
-      });
-    }
-    const dock = () => {
-      const anchor = findToolbarAnchor();
-      if (!anchor?.parentElement) {
-        btn.classList.add("ryan-cw-toggle-fallback");
-        if (!btn.isConnected) document.body.appendChild(btn);
-        return;
-      }
-      btn.classList.remove("ryan-cw-toggle-fallback");
-      const parent = anchor.parentElement;
-      if (buttonLabel(anchor).includes("构想台") && !buttonLabel(anchor).includes("Ryan")) {
-        if (btn.nextSibling !== anchor) parent.insertBefore(btn, anchor);
-      } else if (btn.previousSibling !== anchor) {
-        anchor.insertAdjacentElement("afterend", btn);
-      }
-    };
-    dock();
-    if (!this._obs) {
-      this._obs = new MutationObserver(dock);
-      this._obs.observe(document.body, { childList: true, subtree: true });
-      setTimeout(() => {
-        this._obs?.disconnect();
-        this._obs = null;
-        dock();
-      }, 8000);
-    }
-    return btn;
+    // compatibility no-op: durable toggle lives in entry bootstrap
+    return document.getElementById(TOGGLE_ID);
   }
-
   bindEvents() {
     if (this._eventsBound) return;
     this._eventsBound = true;
@@ -784,23 +748,8 @@ class CreativeWorkspaceApp {
 
 const panel = new CreativeWorkspaceApp();
 
-function boot() {
-  try {
-    panel.mount();
-    console.info("[Ryan Creative Workspace] UI mounted");
-  } catch (err) {
-    console.error("[Ryan Creative Workspace] mount failed", err);
-  }
-}
-
 app.registerExtension({
-  name: "Ryan.CreativeWorkspace",
-  async setup() {
-    boot();
-  },
-  async init() {
-    boot();
-  },
+  name: "Ryan.CreativeWorkspace.Panel",
   async nodeCreated(node) {
     if (node?.comfyClass !== "Ryan Creative Text Selector") return;
     try {
@@ -815,8 +764,6 @@ app.registerExtension({
 });
 
 globalThis.RyanCreativeWorkspace = panel;
-if (document.readyState === "loading") {
-  document.addEventListener("DOMContentLoaded", boot, { once: true });
-} else {
-  setTimeout(boot, 0);
-}
+
+export { panel };
+export default panel;
