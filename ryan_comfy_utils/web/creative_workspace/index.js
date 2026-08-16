@@ -152,7 +152,7 @@ class CreativeWorkspaceApp {
     this.activeRequestId = "";
     this.root = null;
     this.messageList = null;
-    this.composer = None;
+    this.composer = null;
     this._dragBound = false;
   }
 
