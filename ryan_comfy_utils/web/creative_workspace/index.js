@@ -49,23 +49,27 @@ function ensureStyles() {
   const style = el("style", { id: STYLE_ID });
   style.textContent = `
   #${TOGGLE_ID} {
-    position: fixed;
-    top: 10px;
-    right: 280px;
-    z-index: 10060;
-    height: 34px;
+    height: 32px;
     padding: 0 12px;
     border-radius: 8px;
-    border: 1px solid rgba(255,255,255,.18);
+    border: 1px solid rgba(255,255,255,.16);
     background: linear-gradient(180deg, #3a4a6a 0%, #2a3550 100%);
     color: #f3f6ff;
-    font: 600 12px/34px system-ui, sans-serif;
+    font: 600 12px/32px system-ui, sans-serif;
     cursor: pointer;
-    box-shadow: 0 6px 18px rgba(0,0,0,.35);
+    white-space: nowrap;
+    flex: 0 0 auto;
   }
   #${TOGGLE_ID}:hover { filter: brightness(1.08); }
+  #${TOGGLE_ID}.ryan-cw-toggle-fallback {
+    position: fixed;
+    top: 52px;
+    right: 16px;
+    z-index: 10060;
+    box-shadow: 0 6px 18px rgba(0,0,0,.35);
+  }
   #${PANEL_ID} {
-    position: fixed; right: 24px; top: 56px; width: min(440px, calc(100vw - 24px)); max-height: calc(100vh - 72px);
+    position: fixed; right: 24px; top: 96px; width: min(440px, calc(100vw - 24px)); max-height: calc(100vh - 112px);
     z-index: 10055; background: #1e1e1e; color: #f0f0f0; border: 1px solid #444;
     border-radius: 10px; box-shadow: 0 12px 40px rgba(0,0,0,.45);
     display: flex; flex-direction: column; font: 13px/1.4 system-ui, sans-serif;
@@ -92,6 +96,49 @@ function ensureStyles() {
   #${PANEL_ID} .err { color:#f88; }
   `;
   document.head.appendChild(style);
+}
+
+function buttonLabel(node) {
+  return `${node?.textContent || ""} ${node?.getAttribute?.("aria-label") || ""} ${node?.title || ""}`.replace(/\s+/g, " ").trim();
+}
+
+function findTeManToolbarAnchor() {
+  const candidates = [
+    ...document.querySelectorAll("button, [role='button'], a, .p-button, [class*='button']"),
+  ];
+  // Prefer TE_MAN 构想台 (exclude our own button)
+  const te = candidates.find((node) => {
+    if (node.id === TOGGLE_ID) return false;
+    const label = buttonLabel(node);
+    return label.includes("构想台") && !label.includes("Ryan");
+  });
+  if (te) return te;
+  const asset = candidates.find((node) => buttonLabel(node).includes("资产库"));
+  if (asset) return asset;
+  const ctv = candidates.find((node) => {
+    const label = buttonLabel(node);
+    return label === "ComfyTV" || label.includes("ComfyTV");
+  });
+  return ctv || null;
+}
+
+function placeToggleInToolbar(btn) {
+  const anchor = findTeManToolbarAnchor();
+  if (!anchor || !anchor.parentElement) {
+    btn.classList.add("ryan-cw-toggle-fallback");
+    if (btn.parentElement !== document.body) document.body.appendChild(btn);
+    return false;
+  }
+  btn.classList.remove("ryan-cw-toggle-fallback");
+  const parent = anchor.parentElement;
+  // Insert immediately before TE_MAN 构想台 when possible; otherwise after anchor.
+  const anchorLabel = buttonLabel(anchor);
+  if (anchorLabel.includes("构想台") && !anchorLabel.includes("Ryan")) {
+    if (btn.nextSibling !== anchor) parent.insertBefore(btn, anchor);
+  } else if (btn.previousSibling !== anchor) {
+    anchor.insertAdjacentElement("afterend", btn);
+  }
+  return true;
 }
 
 class CreativeWorkspacePanel {
@@ -121,24 +168,42 @@ class CreativeWorkspacePanel {
   ensureToggle() {
     ensureStyles();
     let btn = document.getElementById(TOGGLE_ID);
-    if (btn) return btn;
-    btn = el("button", {
-      id: TOGGLE_ID,
-      type: "button",
-      text: "Ryan 构想台",
-      title: "打开/关闭 Ryan Creative Workspace",
-      onClick: () => this.toggle(),
-    });
-    document.body.appendChild(btn);
-    // Keep clear of top-right cluster on wide screens; fallback leftward on narrow.
-    const place = () => {
-      const w = window.innerWidth || 1200;
-      if (w < 1100) btn.style.right = "12px";
-      else if (w < 1400) btn.style.right = "180px";
-      else btn.style.right = "280px";
+    if (!btn) {
+      btn = el("button", {
+        id: TOGGLE_ID,
+        type: "button",
+        text: "Ryan 构想台",
+        title: "打开/关闭 Ryan Creative Workspace",
+        onClick: () => this.toggle(),
+      });
+    }
+    const dock = () => {
+      try {
+        placeToggleInToolbar(btn);
+      } catch (err) {
+        console.warn("[Ryan Creative Workspace] dock toggle failed", err);
+        btn.classList.add("ryan-cw-toggle-fallback");
+        if (!btn.isConnected) document.body.appendChild(btn);
+      }
     };
-    place();
-    window.addEventListener("resize", place);
+    dock();
+    // Toolbar is often mounted asynchronously (TE_MAN / ComfyTV).
+    if (!this._toggleObserver) {
+      this._toggleObserver = new MutationObserver(() => dock());
+      this._toggleObserver.observe(document.body, { childList: true, subtree: true });
+      window.addEventListener("resize", dock);
+      // Stop aggressive observing after toolbar settles.
+      setTimeout(() => {
+        try {
+          this._toggleObserver?.disconnect();
+        } catch (_err) {
+          /* ignore */
+        }
+        this._toggleObserver = null;
+        // final placement
+        dock();
+      }, 8000);
+    }
     return btn;
   }
 
