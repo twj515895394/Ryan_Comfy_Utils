@@ -15,7 +15,7 @@ class AssetBridgeError(RuntimeError):
     """资产桥接失败。"""
 
 
-def _default_http_json(method: str, url: str, body: dict[str, Any] | None = None, timeout: float = 10.0) -> Any:
+def _default_http_json(method: str, url: str, body: dict[str, Any] | None = None, timeout: float = 1.5) -> Any:
     data = None
     headers = {"Accept": "application/json"}
     if body is not None:
@@ -46,31 +46,97 @@ class ComfyTVAssetBridge:
         self.output_root = Path(output_root) if output_root else Path.cwd() / "output"
 
     def available(self) -> bool:
+        # Prefer in-process ComfyTV storage (no HTTP deadlock / long timeout).
         try:
-            payload = self.http_json("GET", f"{self.base_url}/comfytv/assets?category=all&limit=1")
+            from ComfyTV import storage as ctv_storage  # type: ignore
+
+            rows = ctv_storage.list_assets(limit=1, offset=0)
+            return isinstance(rows, list)
+        except Exception:
+            pass
+        try:
+            payload = self.http_json(
+                "GET",
+                f"{self.base_url}/comfytv/assets?category=all&limit=1",
+                timeout=1.2,
+            )
             return isinstance(payload, dict) and "assets" in payload
         except Exception:
             return False
 
     def list_assets(self, *, category: str = "all", limit: int = 200, offset: int = 0) -> list[dict[str, Any]]:
-        if not self.available():
-            return []
+        try:
+            from ComfyTV import storage as ctv_storage  # type: ignore
+
+            if category in ("", "all", None):
+                rows = ctv_storage.list_assets(limit=limit, offset=offset)
+            elif category == "none":
+                rows = ctv_storage.list_assets(uncategorized=True, limit=limit, offset=offset)
+            else:
+                rows = ctv_storage.list_assets(category_id=int(category), limit=limit, offset=offset)
+            return list(rows) if isinstance(rows, list) else []
+        except Exception:
+            pass
         try:
             payload = self.http_json(
                 "GET",
                 f"{self.base_url}/comfytv/assets?category={category}&limit={limit}&offset={offset}",
+                timeout=2.0,
             )
-        except (HTTPError, URLError, TimeoutError, AssetBridgeError, ValueError, TypeError) as exc:
-            raise AssetBridgeError(str(exc)) from exc
-        assets = payload.get("assets") if isinstance(payload, dict) else None
-        return list(assets) if isinstance(assets, list) else []
+            assets = payload.get("assets") if isinstance(payload, dict) else None
+            return list(assets) if isinstance(assets, list) else []
+        except Exception:
+            return []
 
     def list_categories(self) -> list[dict[str, Any]]:
-        if not self.available():
+        try:
+            from ComfyTV import storage as ctv_storage  # type: ignore
+
+            rows = ctv_storage.list_asset_categories()
+            return list(rows) if isinstance(rows, list) else []
+        except Exception:
+            pass
+        try:
+            payload = self.http_json(
+                "GET",
+                f"{self.base_url}/comfytv/asset_categories",
+                timeout=1.5,
+            )
+        except Exception:
             return []
-        payload = self.http_json("GET", f"{self.base_url}/comfytv/asset_categories")
         cats = payload.get("categories") if isinstance(payload, dict) else None
         return list(cats) if isinstance(cats, list) else []
+
+    def save_local_upload(
+        self,
+        *,
+        project_uploads_dir: str | Path,
+        filename: str,
+        data: bytes,
+        media_type: str = "",
+    ) -> dict[str, Any]:
+        uploads = Path(project_uploads_dir)
+        uploads.mkdir(parents=True, exist_ok=True)
+        safe_name = Path(filename or "upload.bin").name.replace("..", "_")
+        target = uploads / f"{uuid.uuid4().hex[:10]}_{safe_name}"
+        target.write_bytes(data)
+        guessed = (media_type or "").strip().lower()
+        if not guessed:
+            suffix = target.suffix.lower()
+            if suffix in {".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp"}:
+                guessed = "image"
+            elif suffix in {".mp4", ".mov", ".webm", ".mkv", ".avi"}:
+                guessed = "video"
+            elif suffix in {".mp3", ".wav", ".flac", ".m4a", ".aac"}:
+                guessed = "audio"
+            else:
+                guessed = "file"
+        return self.make_local_ref(
+            target,
+            media_type=guessed if guessed != "file" else "image",
+            display_name=safe_name,
+            semantic_role="reference",
+        )
 
     def make_ref(
         self,

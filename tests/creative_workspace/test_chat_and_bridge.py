@@ -68,6 +68,21 @@ class TestChatAndBridge(unittest.TestCase):
         self.assertIn("ASSET image", compiled.text)
         self.assertTrue(compiled.attachment_paths)
 
+    def test_save_local_upload_creates_file_ref(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            bridge = ComfyTVAssetBridge(
+                http_json=lambda *a, **k: (_ for _ in ()).throw(ConnectionError("down"))
+            )
+            ref = bridge.save_local_upload(
+                project_uploads_dir=Path(tmp) / "uploads",
+                filename="shot.png",
+                data=b"fake-image-bytes",
+                media_type="image",
+            )
+            self.assertEqual(ref["provider"], "local")
+            self.assertEqual(ref["media_type"], "image")
+            self.assertTrue(Path(ref["local_path"]).is_file())
+
     def test_artifact_selector_module_removed_and_text_selector_exists(self):
         root = Path(__file__).resolve().parents[2]
         self.assertFalse((root / "ryan_comfy_utils/nodes/artifact_selector_node.py").is_file())

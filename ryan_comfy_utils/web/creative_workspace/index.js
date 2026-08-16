@@ -660,56 +660,148 @@ class CreativeWorkspaceApp {
     const host = this.root?.querySelector(".cw-composer");
     if (!host || !this.projectId) return;
     const pop = el("div", { className: "cw-pop" });
-    pop.append(el("button", { type: "button", text: "加载中…", disabled: true }));
+    const statusBtn = el("button", { type: "button", text: "加载素材…", disabled: true });
+    pop.append(statusBtn);
     host.append(pop);
-    let assets = [];
-    try {
-      const providers = await apiJson("/ryan/creative/assets/providers");
-      const comfy = (providers.providers || []).find((p) => p.id === "comfytv" && p.available);
-      if (comfy) {
-        const data = await apiJson("/ryan/creative/assets?provider=comfytv&limit=50");
-        assets = data.assets || [];
+
+    const finishPick = async (ref) => {
+      if (!ref?.asset_ref_id) return;
+      if (!this.selectedAssetIds.includes(ref.asset_ref_id)) {
+        this.selectedAssetIds.push(ref.asset_ref_id);
       }
-    } catch (_err) {
-      assets = [];
-    }
-    pop.innerHTML = "";
-    if (!assets.length) {
-      pop.append(
-        el("button", {
-          type: "button",
-          text: "无 ComfyTV 资产（可稍后接本地上传）",
-          onClick: () => this.closePop(),
-        })
-      );
-      return;
-    }
-    for (const asset of assets.slice(0, 40)) {
-      pop.append(
-        el("button", {
-          type: "button",
-          text: `${asset.name || asset.id} · ${asset.media_type || "asset"}`,
-          onClick: async () => {
-            try {
-              const data = await apiJson(
-                `/ryan/creative/projects/${encodeURIComponent(this.projectId)}/asset-refs`,
-                { method: "POST", body: { asset, semantic_role: "reference" } }
-              );
-              const ref = data.asset_ref;
-              this.assetRefs = data.asset_refs || this.assetRefs;
-              if (ref?.asset_ref_id && !this.selectedAssetIds.includes(ref.asset_ref_id)) {
-                this.selectedAssetIds.push(ref.asset_ref_id);
-              }
-              if (this.composer?.textarea?.value?.endsWith("@")) {
-                this.composer.textarea.value = this.composer.textarea.value.slice(0, -1);
-              }
-              this.renderChips();
-              this.closePop();
-              this.setStatus(`已引用 ${ref?.display_name || "资产"}`);
-            } catch (err) {
-              this.setStatus(String(err.message || err), true);
+      if (ref) {
+        const exists = this.assetRefs.some((a) => a.asset_ref_id === ref.asset_ref_id);
+        if (!exists) this.assetRefs.push(ref);
+      }
+      if (this.composer?.textarea?.value?.endsWith("@")) {
+        this.composer.textarea.value = this.composer.textarea.value.slice(0, -1);
+      }
+      this.renderChips();
+      this.closePop();
+      this.setStatus(`已引用 ${ref.display_name || "素材"}`);
+    };
+
+    const addLocalUploadRow = () => {
+      const row = el("div", { style: "padding:10px 12px;border-bottom:1px solid rgba(255,255,255,.08)" });
+      const label = el("div", {
+        text: "本地图片 / 视频 / 音频",
+        style: "margin-bottom:6px;color:rgba(242,244,247,.7);font-size:11px",
+      });
+      const input = document.createElement("input");
+      input.type = "file";
+      input.accept = "image/*,video/*,audio/*";
+      input.multiple = true;
+      input.style.width = "100%";
+      input.addEventListener("change", async () => {
+        const files = [...(input.files || [])];
+        if (!files.length) return;
+        statusBtn.textContent = `上传中 0/${files.length}…`;
+        try {
+          for (let i = 0; i < files.length; i += 1) {
+            const file = files[i];
+            statusBtn.textContent = `上传中 ${i + 1}/${files.length}…`;
+            const form = new FormData();
+            form.append("file", file, file.name);
+            if (file.type.startsWith("video/")) form.append("media_type", "video");
+            else if (file.type.startsWith("audio/")) form.append("media_type", "audio");
+            else form.append("media_type", "image");
+            const response = await api.fetchApi(
+              `/ryan/creative/projects/${encodeURIComponent(this.projectId)}/local-assets`,
+              { method: "POST", body: form }
+            );
+            const data = await response.json();
+            if (!response.ok || data.status === "error") {
+              throw new Error(data.error || `upload failed HTTP ${response.status}`);
             }
-          },
+            this.assetRefs = data.asset_refs || this.assetRefs;
+            await finishPick(data.asset_ref);
+          }
+        } catch (err) {
+          this.setStatus(String(err.message || err), true);
+          statusBtn.textContent = "上传失败，可重试本地选择";
+          statusBtn.disabled = false;
+        }
+      });
+      row.append(label, input);
+      pop.append(row);
+    };
+
+    try {
+      // Always offer local upload first so UI never dead-ends on ComfyTV.
+      pop.innerHTML = "";
+      addLocalUploadRow();
+
+      let assets = [];
+      let comfyAvailable = false;
+      try {
+        const providers = await apiJson("/ryan/creative/assets/providers");
+        comfyAvailable = Boolean((providers.providers || []).find((p) => p.id === "comfytv" && p.available));
+      } catch (_err) {
+        comfyAvailable = false;
+      }
+
+      if (comfyAvailable) {
+        try {
+          const data = await apiJson("/ryan/creative/assets?provider=comfytv&limit=50");
+          assets = data.assets || [];
+        } catch (_err) {
+          assets = [];
+        }
+      }
+
+      if (!comfyAvailable) {
+        pop.append(
+          el("button", {
+            type: "button",
+            text: "ComfyTV 暂不可用 · 请用上方本地上传",
+            onClick: () => {},
+          })
+        );
+      } else if (!assets.length) {
+        pop.append(
+          el("button", {
+            type: "button",
+            text: "ComfyTV 资产库为空 · 可本地上传",
+            onClick: () => {},
+          })
+        );
+      } else {
+        pop.append(
+          el("button", {
+            type: "button",
+            text: `ComfyTV 资产（${assets.length}）`,
+            disabled: true,
+          })
+        );
+        for (const asset of assets.slice(0, 40)) {
+          pop.append(
+            el("button", {
+              type: "button",
+              text: `${asset.name || asset.id} · ${asset.media_type || "asset"}`,
+              onClick: async () => {
+                try {
+                  const data = await apiJson(
+                    `/ryan/creative/projects/${encodeURIComponent(this.projectId)}/asset-refs`,
+                    { method: "POST", body: { asset, semantic_role: "reference" } }
+                  );
+                  this.assetRefs = data.asset_refs || this.assetRefs;
+                  await finishPick(data.asset_ref);
+                } catch (err) {
+                  this.setStatus(String(err.message || err), true);
+                }
+              },
+            })
+          );
+        }
+      }
+    } catch (err) {
+      pop.innerHTML = "";
+      addLocalUploadRow();
+      pop.append(
+        el("button", {
+          type: "button",
+          text: `素材面板异常：${err.message || err}`,
+          onClick: () => this.closePop(),
         })
       );
     }

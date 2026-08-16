@@ -323,7 +323,7 @@ def register_routes(
     @app_routes.get("/ryan/creative/assets/providers")
     async def asset_providers(request: Any) -> Any:
         try:
-            comfy = bridge.available()
+            comfy = await asyncio.to_thread(bridge.available)
             return _response(
                 {
                     "status": "ok",
@@ -340,13 +340,22 @@ def register_routes(
     async def list_assets(request: Any) -> Any:
         try:
             provider = request.rel_url.query.get("provider", "comfytv")
+            if provider == "local":
+                return _response({"status": "ok", "assets": []})
             if provider != "comfytv":
                 return _response({"status": "ok", "assets": []})
-            assets = bridge.list_assets(
-                category=request.rel_url.query.get("category", "all"),
-                limit=int(request.rel_url.query.get("limit", "200")),
-                offset=int(request.rel_url.query.get("offset", "0")),
-            )
+
+            def _list() -> list[dict[str, Any]]:
+                try:
+                    return bridge.list_assets(
+                        category=request.rel_url.query.get("category", "all"),
+                        limit=int(request.rel_url.query.get("limit", "200")),
+                        offset=int(request.rel_url.query.get("offset", "0")),
+                    )
+                except Exception:
+                    return []
+
+            assets = await asyncio.to_thread(_list)
             return _response({"status": "ok", "assets": assets})
         except Exception as exc:  # noqa: BLE001
             return _error(exc, _status_for(exc))
@@ -371,6 +380,50 @@ def register_routes(
                     semantic_role=str(body.get("semantic_role") or "reference"),
                     usage=str(body.get("usage") or "reference"),
                 )
+            refs.append(ref)
+            repo.write_asset_refs(project_id, refs)
+            return _response({"status": "ok", "asset_ref": ref, "asset_refs": refs})
+        except Exception as exc:  # noqa: BLE001
+            return _error(exc, _status_for(exc))
+
+    @app_routes.post("/ryan/creative/projects/{project_id}/local-assets")
+    async def upload_local_asset(request: Any) -> Any:
+        """Upload local image/video/audio into project cache and create AssetRef."""
+        try:
+            project_id = request.match_info["project_id"]
+            if web is None:
+                raise RuntimeError("aiohttp unavailable")
+            reader = await request.multipart()
+            filename = "upload.bin"
+            media_type = ""
+            payload = b""
+            while True:
+                part = await reader.next()
+                if part is None:
+                    break
+                name = part.name or ""
+                if name in {"file", "upload", "asset"}:
+                    filename = part.filename or filename
+                    payload = await part.read(decode=False)
+                elif name == "media_type":
+                    media_type = (await part.text()).strip()
+                elif name == "filename":
+                    filename = (await part.text()).strip() or filename
+            if not payload:
+                # also accept raw body fallback
+                raw = await request.read()
+                if raw:
+                    payload = raw
+            if not payload:
+                raise ValueError("empty upload")
+            uploads_dir = repo.paths(project_id).cache / "uploads"
+            ref = bridge.save_local_upload(
+                project_uploads_dir=uploads_dir,
+                filename=filename,
+                data=payload,
+                media_type=media_type,
+            )
+            refs = repo.read_asset_refs(project_id)
             refs.append(ref)
             repo.write_asset_refs(project_id, refs)
             return _response({"status": "ok", "asset_ref": ref, "asset_refs": refs})
