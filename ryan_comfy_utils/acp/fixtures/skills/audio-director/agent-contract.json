@@ -1,0 +1,17 @@
+{
+  "schema_version": 2,
+  "display_name": "音频导演",
+  "recommended_agent_name": "音频导演",
+  "accepts_context_kinds": ["creative.story", "production.design", "script.direction", "storyboard.plan"],
+  "produces_context_kind": "audio.design",
+  "artifact_type": "audio_design",
+  "artifact_output_kinds": ["audio_prompt"],
+  "artifact_output_purposes": {
+    "audio_prompt": ["music", "voice", "foley", "ambience"]
+  },
+  "language": "zh-CN",
+  "canonical_document_only": true,
+  "discussion_mode": true,
+  "commit_mode": true,
+  "commit_title": "Audio Design Canon"
+}

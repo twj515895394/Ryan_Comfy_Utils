@@ -1,0 +1,11 @@
+{
+  "runner": "pi_cli",
+  "command": ["pi", "-p"],
+  "mode": "text",
+  "no_context_files": true,
+  "use_skill_flag": true,
+  "tool_policy": "full",
+  "workspace_root": "output/acp_workspace",
+  "timeout_seconds": 300,
+  "environment": {}
+}

@@ -22,7 +22,7 @@ from .comfy_image_inputs import (
 
 
 PACKAGE_ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_PROFILE_PATH = PACKAGE_ROOT / "acp" / "fixtures" / "profiles" / "local_claude_cli.json"
+DEFAULT_PROFILE_PATH = PACKAGE_ROOT / "acp" / "fixtures" / "profiles" / "local_pi.json"
 DEFAULT_MANIFEST_PATH = PACKAGE_ROOT / "acp" / "fixtures" / "manifests" / "universal_agent.json"
 DEFAULT_IMAGE_PROMPT_MANIFEST_PATH = (
     PACKAGE_ROOT / "acp" / "fixtures" / "manifests" / "image_prompt_agent.json"

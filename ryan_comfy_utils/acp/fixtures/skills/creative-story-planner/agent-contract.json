@@ -1,9 +1,16 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "display_name": "创意策划",
   "recommended_agent_name": "创意策划",
   "accepts_context_kinds": ["*"],
   "produces_context_kind": "creative.story",
+  "artifact_type": "creative_story",
+  "artifact_output_kinds": ["concept_image_prompt"],
+  "artifact_output_purposes": {
+    "concept_image_prompt": ["concept_art", "moodboard"]
+  },
+  "language": "zh-CN",
+  "canonical_document_only": true,
   "discussion_mode": true,
   "commit_mode": true,
   "commit_title": "Creative Story Canon"

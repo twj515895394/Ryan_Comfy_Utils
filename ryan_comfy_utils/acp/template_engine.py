@@ -1,6 +1,7 @@
 def render_context_template(template: str, payload: dict) -> str:
     replacements = {
         "{skill_directory}": payload["skill"]["directory"],
+        "{adapter_skill_directory}": payload["skill"].get("adapter_directory", ""),
         "{input.text}": payload["input"]["text"],
         "{input.images}": "\n".join(payload["input"].get("images", [])),
         "{input.files}": "\n".join(payload["input"].get("files", [])),

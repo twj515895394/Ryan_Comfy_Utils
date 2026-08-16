@@ -1,4 +1,7 @@
-from .ryan_comfy_utils.nodes.llm_nodes import RyanLLMChat, RyanLLMVisionChat
+from .ryan_comfy_utils.nodes.workflow_agent_node import RyanWorkflowAgent
+from .ryan_comfy_utils.nodes.artifact_selector_node import RyanArtifactSelector
+from .ryan_comfy_utils.workflow_agent import routes as _workflow_agent_routes
+
 from .ryan_comfy_utils.nodes.acp_nodes import (
     RyanACPImageAnalyzeAgent,
     RyanACPImagePromptAgent,
@@ -6,6 +9,7 @@ from .ryan_comfy_utils.nodes.acp_nodes import (
     RyanACPUniversalAgent,
     RyanACPVideoPromptAgent,
 )
+from .ryan_comfy_utils.nodes.llm_nodes import RyanLLMChat, RyanLLMVisionChat
 from .ryan_comfy_utils.nodes.file_nodes import RyanFileExporter
 from .ryan_comfy_utils.nodes.prompt_nodes import RyanPromptTemplate
 from .ryan_comfy_utils.nodes.video_nodes import RyanBatchVideoLoader, RyanVideoFrameSampler, RyanImageBatchSplitter, RyanVideoSceneSplitter
@@ -23,6 +27,9 @@ WEB_DIRECTORY = "./ryan_comfy_utils/web"
 NODE_CLASS_MAPPINGS = {
     "Ryan ACP Universal Agent": RyanACPUniversalAgent,
     "Ryan ACP Image Prompt Agent": RyanACPImagePromptAgent,
+    "Ryan Workflow Agent": RyanWorkflowAgent,
+    "Ryan Artifact Selector": RyanArtifactSelector,
+
     "Ryan ACP Image Analyze Agent": RyanACPImageAnalyzeAgent,
     "Ryan ACP Video Prompt Agent": RyanACPVideoPromptAgent,
     "Ryan ACP MiniMax H3 Video Prompt Agent": RyanACPMiniMaxH3VideoPromptAgent,
@@ -43,6 +50,9 @@ NODE_CLASS_MAPPINGS = {
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
+    "Ryan Workflow Agent": "Ryan Workflow Agent",
+    "Ryan Artifact Selector": "Ryan Artifact Selector",
+
     "Ryan ACP Universal Agent": "Ryan ACP Universal Agent",
     "Ryan ACP Image Prompt Agent": "Ryan Image Prompt Agent",
     "Ryan ACP Image Analyze Agent": "Ryan Image Analyze Agent",

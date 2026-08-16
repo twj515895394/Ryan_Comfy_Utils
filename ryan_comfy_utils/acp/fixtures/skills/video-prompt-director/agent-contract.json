@@ -1,9 +1,16 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "display_name": "视频提示词导演",
   "recommended_agent_name": "视频提示词导演",
-  "accepts_context_kinds": ["storyboard.plan", "script.direction", "production.design", "creative.story"],
+  "accepts_context_kinds": ["storyboard.plan", "script.direction", "production.design", "creative.story", "audio.design"],
   "produces_context_kind": "video.prompts",
+  "artifact_type": "video_prompts",
+  "artifact_output_kinds": ["video_prompt"],
+  "artifact_output_purposes": {
+    "video_prompt": ["segment_execution"]
+  },
+  "language": "zh-CN",
+  "canonical_document_only": true,
   "discussion_mode": true,
   "commit_mode": true,
   "commit_title": "Video Prompt Canon"

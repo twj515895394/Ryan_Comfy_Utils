@@ -32,7 +32,7 @@ class RyanImageGenerator:
                 "profile": (profiles,),
                 "model_override": ("STRING", {"default": ""}),
                 "prompt": ("STRING", {"default": "", "multiline": True}),
-                "size": (["1024x1024", "512x512", "768x768", "1024x576", "576x1024", "custom"], {"default": "1024x1024"}),
+                "size": (["1024x1024", "512x512", "768x768", "1536x1024", "1024x1536", "1024x576", "576x1024", "2048x2048", "2048x1152", "1152x2048", "3840x2160", "2160x3840", "custom"], {"default": "1024x1024"}),
                 "custom_width": ("INT", {"default": 1024, "min": 64, "max": 8192, "step": 8}),
                 "custom_height": ("INT", {"default": 1024, "min": 64, "max": 8192, "step": 8}),
                 "number_of_images": ("INT", {"default": 1, "min": 1, "max": 10, "step": 1}),

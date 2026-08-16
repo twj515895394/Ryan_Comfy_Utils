@@ -1,9 +1,17 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "display_name": "分镜导演",
   "recommended_agent_name": "分镜导演",
   "accepts_context_kinds": ["creative.story", "production.design", "script.direction"],
   "produces_context_kind": "storyboard.plan",
+  "artifact_type": "storyboard_plan",
+  "artifact_output_kinds": ["storyboard_prompt", "keyframe_prompt"],
+  "artifact_output_purposes": {
+    "storyboard_prompt": ["control_storyboard", "style_storyboard"],
+    "keyframe_prompt": ["start_frame", "end_frame", "reference_frame"]
+  },
+  "language": "zh-CN",
+  "canonical_document_only": true,
   "discussion_mode": true,
   "commit_mode": true,
   "commit_title": "Storyboard Canon"

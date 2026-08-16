@@ -1,9 +1,23 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "display_name": "美术/资产设计",
   "recommended_agent_name": "美术资产设计师",
   "accepts_context_kinds": ["creative.story", "character.design", "location.design", "research.note"],
   "produces_context_kind": "production.design",
+  "artifact_type": "production_design",
+  "artifact_output_kinds": ["image_prompt"],
+  "artifact_output_purposes": {
+    "image_prompt": [
+      "character_reference",
+      "character_sheet",
+      "expression_sheet",
+      "scene_reference",
+      "spatial_reference",
+      "prop_reference"
+    ]
+  },
+  "language": "zh-CN",
+  "canonical_document_only": true,
   "discussion_mode": true,
   "commit_mode": true,
   "commit_title": "Production Design Canon"

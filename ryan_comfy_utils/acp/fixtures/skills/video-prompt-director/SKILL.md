@@ -38,9 +38,12 @@ storyboard.plan
 script.direction
 production.design
 creative.story
+audio.design
 ```
 
-只用于核对当前 Segment 真正需要的角色、场景、表演和道具连续性。
+`audio.design` 不是可有可无的装饰输入：如果音频导演已经提交 Canon，视频提示词导演必须把当前 Segment 相关的 BGM、Foley-SFX、Ambience、Silence、对白节拍和同步点整合进视频 Prompt。只有在没有音频设计输入时，才允许明确标记音频待定。
+
+只用于核对当前 Segment 真正需要的角色、场景、表演、道具和声音连续性。
 
 可选用户输入：
 
@@ -71,6 +74,18 @@ creative.story
 - character / scene / prop IDs；
 - Hero / Bridge intent；
 - immutable visual facts。
+
+## 音频整合规则
+
+音频导演的 `Audio Design Canon` 是视频阶段的声音依据。视频 Prompt 不应机械复制整份音频文档，而应把与当前 Segment 动作时序直接相关的内容翻译成可执行的 `audio_sync`：
+
+- BGM：进入、退出、强弱变化和需要避让的对白或动作；
+- Foley-SFX：绑定到具体动作落点、接触材质和反应延迟；
+- Ambience：只保留影响空间感、叙事和对白清晰度的动态；
+- Silence：写明静默发生的动作节点和持续时间；
+- Voice：写明对白、气口、停顿、重音和嘴部动作何时同步。
+
+`audio_sync` 必须绑定 `SEG_###` 的动作、反应或镜头节奏，不能凭空新增声音事件，也不能让声音改变已确认的剧情、Blocking 或镜头结果。独立 `audio_prompt` 只在用户或工作流确实连接音频生成节点时消费，不是生成视频 Prompt 的前置条件。
 
 上游如果存在明显不可执行矛盾，DISCUSS 中指出并给最小修复建议；不能静默改写。
 
@@ -317,6 +332,7 @@ Commit 前检查：
 - start/end state 是否一致；
 - 道具/服装/身份是否漂移；
 - 反应顺序是否错误；
+- 若存在 `audio.design`，每个相关 Segment 是否都有绑定动作或节奏的 `audio_sync`；
 - 运镜是否冲突；
 - Prompt 是否过载；
 - model-specific 版本是否改变导演意图；
@@ -345,3 +361,28 @@ storyboard-director
 - 声称已经生成视频；
 - 让未连接 Agent 的私有聊天进入 Prompt；
 - 把 DISCUSS 草稿当作最终 Commit。
+
+## 19. 输出纪律
+
+- COMMIT 只输出一份中文 Canonical 文档；可使用 `Director Prompt`、`Segment`、`Continuity` 等英文专业词，不生成独立英文版。
+- 不输出内部思考、候选淘汰、工具调用、独立 Review 或独立 Handoff 文件。
+- 每个确实需要生成视频的 `SEG_###` 才追加一个 `video_prompt` output；`target_ids` 必须指向对应 Segment。
+- Prompt 正文统一写入中文 `text`；不生成 `prompt_en`、`text_en` 或双语副本。只翻译已确认的 Storyboard、Script、Production Design 和 Audio，不重新导演。
+## 最小合格示例
+
+```markdown
+# Video Prompt Canon
+## Global Continuity
+CHAR_001、SCENE_001、PROP_001 的身份和位置继承自上游 Canon；不重新设计故事。
+## SEG_001 Director Prompt
+- start_state：CHAR_001 在摊位左侧，顾客在右侧持 PROP_001。
+- action：递袋，停顿半秒，CHAR_001 抬眼确认；动作顺序不可交换。
+- camera：中景轻微推进，保持轴线和夜市冷暖光。
+- audio_sync：帆布袋摩擦、金属夹轻响，停顿处静默。
+- end_state：CHAR_001 抬眼，顾客仍在右侧。
+```
+
+```ryan-artifact
+{"artifact_type":"video_prompts","schema_version":2,"content":{"summary":"SEG_001 可执行视频提示词","handoff":"交给视频生成节点逐 Segment 执行","locks":["SEG_001"]},"outputs":[{"output_id":"SEG_001_VIDEO","kind":"video_prompt","label":"SEG_001 视频 Prompt","purpose":"segment_execution","target_ids":["SEG_001"],"text":"中文视频 Prompt：保持 CHAR_001 左侧、顾客右侧的站位；中景轻微推进。先递袋，再停顿半秒，随后 CHAR_001 抬眼确认；帆布袋摩擦与金属夹轻响同步，停顿处保留静默；结束时两人位置不变。","priority":50}],"shots":[]}
+```
+

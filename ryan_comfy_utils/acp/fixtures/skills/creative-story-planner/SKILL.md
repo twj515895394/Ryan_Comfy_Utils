@@ -205,3 +205,29 @@ COMMIT 前检查：
 - 生成最终视频 Prompt；
 - 把未连接 Agent 的聊天当共享项目记忆；
 - 把 DISCUSS 中被用户否定的方案带入 COMMIT。
+
+## 8. 输出纪律
+
+- COMMIT 只输出一份中文 Canonical 文档；可使用 `Story Beats`、`Logline` 等英文专业词，不生成独立英文版。
+- 不输出内部思考、候选淘汰、工具调用、独立 Review 或独立 Handoff 文件。
+- 默认不生成 Prompt。用户明确需要概念图时，最多追加一个 `ryan-artifact` block，且只允许 `concept_image_prompt`。
+- 故事依据、角色功能和视觉方向不得伪装成图像 Prompt；没有概念图需求时使用 `outputs: []`、`shots: []`。
+
+## 9. 最小合格示例
+
+```markdown
+# Creative Story Canon
+## 项目意图
+15 秒喜剧短片：CHAR_001 为保住摊位，必须在误会扩大前拿回 PROP_001。
+## Story Beats
+- BEAT_001：CHAR_001 发现 PROP_001 被误拿，先克制不追。
+- BEAT_002：误会升级，CHAR_001 用一个可见动作阻止冲突。
+- BEAT_003：真相揭开，保留停顿后的反应笑点。
+## 必须保留 / 避免
+- 保留：CHAR_001 的动机、夜市单一地点、误会后停顿。
+- 避免：新增反派、改变道具归属、无依据的世界观设定。
+## 下游交接
+角色功能与 BEAT_001~003 已锁定；美术只需视觉化 CHAR_001、PROP_001、SCENE_001。
+```
+
+需要概念图时，正文末尾最多追加一个 Bundle；没有概念图需求时必须是 `outputs: []`、`shots: []`。

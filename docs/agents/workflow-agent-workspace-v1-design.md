@@ -1,6 +1,6 @@
 # Ryan Workflow Agent Workspace V1 详细设计
 
-> 状态：V1 设计基线
+> 状态：V1 设计基线；Runtime、Generic Node、Chat/Commit、Workspace、Assets 与 ComfyUI 节点联动已实现，浏览器人工验收由使用者执行
 > 日期：2026-08-10
 > 目标仓库：`Ryan_Comfy_Utils`
 > 核心原则：**Workflow = Project Scope；Agent = 独立会话；DAG = Context 传播路径；Chat != Commit。**
@@ -751,6 +751,21 @@ V1 完成至少满足：
 10. 节点复制默认不会串 Session；
 11. 图片/文档/视频/音频至少能以 AssetRef 进入会话；
 12. Starter Skill 串行链可跑通 Creative -> Production -> Script -> Storyboard -> Video Prompt。
+
+### 22.1 当前实现补充
+
+实现中的 `Ryan Workflow Agent` 保持 ComfyUI 工作流兼容性：
+
+- `workflow_id` 首次创建时写入 `extra.ryan_agent`，同一 Workflow 内的 Agent 共用该值；
+- 每个节点生成独立 `agent_uid`，复制节点不会复用已有会话身份；
+- 节点固定保留 8 路 `RYAN_CONTEXT` 与 10 路 `IMAGE` Socket；
+- `context_slot_count` / `image_slot_count` 只隐藏未连接的高位 Socket，已连接 Socket 始终保留；
+- Skill 选择负责默认 Agent Name，用户手工修改后保留手工名称；
+- `Open Chat` 通过 `ryan-workflow-agent-open-chat` 事件把 Workflow、Agent、Skill 和 Context 传给右侧 Workspace；
+- 节点状态显示与 Workspace 状态事件同步，不改变 ComfyUI Queue 语义。
+
+浏览器手测步骤、预期结果和问题回报格式见 `docs/agents/workflow-agent-manual-acceptance-v1.md`。
+
 
 ## 23. 最终一句话模型
 

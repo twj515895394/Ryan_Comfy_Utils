@@ -268,3 +268,30 @@ Commit 前检查：
 - 在本阶段写最终模型专用视频 Prompt；
 - 声称已生成故事板图片/视频；
 - 自动读取未连接 Agent 的会话。
+
+## 8. 输出纪律
+
+- COMMIT 只输出一份中文 Canonical 文档；可使用 `Shot`、`Segment`、`start_state` 等英文专业词，不生成独立英文版。
+- 不输出内部思考、候选淘汰、工具调用、独立 Review 或独立 Handoff 文件。
+- 只有确实需要连接图像生成节点时才追加一个 `ryan-artifact` block，Prompt kind 只能是 `storyboard_prompt` 或 `keyframe_prompt`。
+- 每条 Prompt 必须使用中文 `text`，写明 `purpose` 和 `target_ids`；Shot/Segment 计划和连续性依据留在 Canon 正文。
+## 9. 最小合格示例
+
+```markdown
+# Storyboard Canon
+## Global Continuity
+CHAR_001 在摊位左侧；PROP_001 的颜色、持有者与出现顺序不可漂移。
+## Shot List
+### SHOT_001 / SEG_001
+- start_state：CHAR_001 左侧站立，PROP_001 在顾客手中。
+- action：递袋、停顿、抬眼；结束时保持两人距离。
+- camera：中景，轻微推进，不切换轴线。
+- end_state：CHAR_001 抬眼，顾客仍在右侧。
+## 下游交接
+视频继承 SHOT_001 的 start/end state 与动作顺序；音频以 SEG_001 标记拟音和停顿。
+```
+
+```ryan-artifact
+{"artifact_type":"storyboard_plan","schema_version":2,"content":{"summary":"SEG_001 首帧与动作依据","handoff":"视频继承站位、镜头和首尾状态","locks":["SHOT_001","SEG_001"]},"outputs":[{"output_id":"SHOT_001_KEYFRAME","kind":"keyframe_prompt","label":"SHOT_001 首帧","purpose":"start_frame","target_ids":["SHOT_001"],"text":"中文关键帧 Prompt：CHAR_001 位于夜市摊位左侧，顾客在右侧持有 PROP_001，中景、冷暖对撞灯光，保留可延续的站位与空间纵深。","priority":50}],"shots":[]}
+```
+

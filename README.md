@@ -42,6 +42,34 @@ ACP Profile / CLI 占位符与失败语义见 `docs/agents/acp-runtime-cli-profi
 - `session_dir`
 - `raw_result_json`
 
+### Ryan Workflow Agent
+
+分类：`Ryan Utils / Agent`
+
+通用的 DAG Agent 节点。`skill_id` 决定 Agent 能力，节点固定保留 8 路 `RYAN_CONTEXT` 输入和 10 路图片输入，避免工作流刷新时动态增删 Socket 导致连线丢失。
+
+使用流程：
+
+1. 在 ComfyUI 中放置多个 `Ryan Workflow Agent`，通过 `RYAN_CONTEXT` 连线组成串行、fan-out 或 fan-in DAG。
+2. 点击节点的 `Open Chat`，在右侧 Workspace 中进行私有 DISCUSS；聊天 Draft 默认不会传播给下游。
+3. 上传图片、文本、视频或文档后，点击 `确认并提交`；只有 Commit 生成的 Canonical Context Entry 才会沿 DAG 输出。
+4. 下游节点会按 Entry ID 合并去重，并保留来源 Agent、revision、资产引用和 lineage。
+
+Workspace 支持：
+
+- 多轮私有 Chat、Draft 持久化、生成中 / Stop / 错误状态；
+- Context Inspector，显示上游 Agent、Entry、revision、资产和来源；
+- 图片、`.txt` / `.md` / `.json` / `.csv`、视频附件；
+- 音频入口保留但禁用，不会伪装成已消费；
+- 右侧面板隐藏、恢复和拖拽调整宽度。
+
+Agent Session 以 `workflow_id + agent_uid` 隔离，Commit 不会自动 Queue。Pi RPC、Session、Asset Store 和 API 细节见：
+
+- `docs/agents/workflow-agent-workspace-v1-design.md`
+- `docs/agents/workflow-agent-context-contract-v1.md`
+- `docs/agents/workflow-agent-ui-ux-v1.md`
+- `docs/agents/scene-forge-skill-migration-v1.md`
+
 ### Ryan Image Prompt Agent
 
 分类：`Ryan Utils / ACP`

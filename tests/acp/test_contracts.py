@@ -26,6 +26,17 @@ class TestACPContracts(unittest.TestCase):
         self.assertIn("claude", profile["command"])
         self.assertGreater(profile["timeout_seconds"], 0)
 
+
+    def test_load_pi_profile_requires_explicit_safety_options(self):
+        profile = load_profile(
+            Path("ryan_comfy_utils/acp/fixtures/profiles/local_pi.json")
+        )
+        self.assertEqual(profile["runner"], "pi_cli")
+        self.assertEqual(profile["mode"], "text")
+        self.assertTrue(profile["no_context_files"])
+        self.assertTrue(profile["use_skill_flag"])
+        self.assertEqual(profile["tool_policy"], "full")
+
     def test_validate_result_payload_requires_status_and_outputs(self):
         payload = json.loads(
             Path("ryan_comfy_utils/acp/fixtures/results/text_success.json").read_text(

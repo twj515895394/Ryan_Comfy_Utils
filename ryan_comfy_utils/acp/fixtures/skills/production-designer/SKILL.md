@@ -234,3 +234,30 @@ Commit 前检查：
 - 写最终视频 Prompt；
 - 声称已经生成图片；
 - 读取未通过 DAG 传入的其他 Agent 私有信息。
+
+## 8. 输出纪律
+
+- COMMIT 只输出一份中文 Canonical 文档；可使用 `Continuity`、`IDENTITY_REFERENCE` 等英文专业词，不生成独立英文版。
+- 不输出内部思考、候选淘汰、工具调用、独立 Review 或独立 Handoff 文件。
+- 只有确实需要连接图像生成节点时才追加一个 `ryan-artifact` block；每条 Prompt 必须有 `purpose`、实体 `target_ids` 和中文 `text`。
+- 只为需要落地的角色、场景、道具或空间参考生成 Prompt；视觉锁、资产策略和 Continuity 留在正文，不伪装成 Prompt。
+## 9. 最小合格示例
+
+```markdown
+# Production Design Canon
+## 统一视觉语言
+中景偏写实喜剧；冷青环境光与摊位暖灯对撞；红色围巾是 CHAR_001 的主识别色。
+## 角色锁
+CHAR_001：旧帆布围裙、红色围巾、左眉一道浅疤；服装颜色与比例不得漂移。
+## 场景 / 道具锁
+SCENE_001 只发生在夜市摊位；PROP_001 为带缺口的蓝色金属夹，状态变化必须可追踪。
+## Continuity
+CHAR_001 始终在摊位左侧；PROP_001 从挂钩取下后只能出现在 CHAR_001 或顾客手中。
+## 下游交接
+分镜继承 CHAR_001、SCENE_001、PROP_001 的身份与空间锁；参考图只服务于需要生成的资产。
+```
+
+```ryan-artifact
+{"artifact_type":"production_design","schema_version":2,"content":{"summary":"角色与空间锁","handoff":"交给分镜继承身份、位置和道具状态","locks":["CHAR_001","SCENE_001","PROP_001"]},"outputs":[{"output_id":"CHAR_001_REFERENCE","kind":"image_prompt","label":"CHAR_001 角色参考图","purpose":"character_sheet","target_ids":["CHAR_001"],"text":"中文角色参考图：正面、侧面、背面与三种表情，旧帆布围裙、红色围巾、左眉浅疤，纯参考板构图，不做海报。","negative_constraints":["不要海报构图","不要改变围巾颜色"],"aspect_ratio":"4:3","priority":50}],"shots":[]}
+```
+

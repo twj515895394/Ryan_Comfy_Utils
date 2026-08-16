@@ -1,9 +1,14 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "display_name": "剧本导演",
   "recommended_agent_name": "剧本导演",
   "accepts_context_kinds": ["creative.story", "production.design"],
   "produces_context_kind": "script.direction",
+  "artifact_type": "script_direction",
+  "artifact_output_kinds": [],
+  "artifact_output_purposes": {},
+  "language": "zh-CN",
+  "canonical_document_only": true,
   "discussion_mode": true,
   "commit_mode": true,
   "commit_title": "Script Direction Canon"

@@ -21,6 +21,13 @@ class TestImageGeneratorNode(unittest.TestCase):
         self.assertIn("number_of_images", required)
         self.assertIn("response_format", required)
         self.assertIn("extra_body_json", required)
+        self.assertIn("gpt-image-2", required["profile"][0])
+        self.assertIn("1536x1024", required["size"][0])
+        self.assertIn("1024x1536", required["size"][0])
+        self.assertIn("2048x1152", required["size"][0])
+        self.assertIn("1152x2048", required["size"][0])
+        self.assertIn("3840x2160", required["size"][0])
+        self.assertIn("2160x3840", required["size"][0])
         
         # Verify optional inputs have image_01 to image_10 slots
         self.assertIn("image_01", optional)
@@ -59,9 +66,9 @@ class TestImageGeneratorNode(unittest.TestCase):
             profile="test_profile",
             model_override="",
             prompt="A beautiful sunrise",
-            size="512x512",
-            custom_width=512,
-            custom_height=512,
+            size="3840x2160",
+            custom_width=3840,
+            custom_height=2160,
             number_of_images=1,
             response_format="b64_json",
             extra_body_json="",
@@ -69,6 +76,10 @@ class TestImageGeneratorNode(unittest.TestCase):
             image_01=None,
             image_02=None,
         )
+        args, kwargs = mock_urlopen.call_args
+        req = args[0]
+        req_body = json.loads(req.data.decode("utf-8"))
+        self.assertEqual(req_body["size"], "3840x2160")
 
         # Verify output shape and type
         self.assertEqual(len(result), 1)

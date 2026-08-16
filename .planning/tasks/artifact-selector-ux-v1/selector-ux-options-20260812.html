@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Ryan Artifact Selector 交互方案预览</title>
+  <style>
+    :root { color-scheme: dark; --bg:#17191d; --panel:#25282e; --node:#303238; --line:#454952; --text:#e8eaf0; --muted:#9ea4b0; --green:#6bdc82; --blue:#7ab6ff; --orange:#e4ad62; }
+    * { box-sizing:border-box; }
+    body { margin:0; padding:28px; background:linear-gradient(135deg,#111317,#1d2026); color:var(--text); font:14px/1.5 system-ui,-apple-system,"Microsoft YaHei",sans-serif; }
+    h1 { margin:0 0 8px; font-size:24px; }
+    .intro { max-width:980px; color:var(--muted); margin-bottom:24px; }
+    .grid { display:grid; grid-template-columns:repeat(3,minmax(260px,1fr)); gap:18px; align-items:start; }
+    .option { background:rgba(37,40,46,.9); border:1px solid var(--line); border-radius:12px; padding:16px; box-shadow:0 12px 30px #0005; }
+    .option.recommended { border-color:var(--blue); box-shadow:0 0 0 1px #7ab6ff33,0 12px 30px #0005; }
+    .option h2 { margin:0 0 4px; font-size:17px; }
+    .tag { display:inline-block; color:#14202e; background:var(--blue); border-radius:99px; padding:2px 8px; font-size:11px; margin-bottom:10px; }
+    .desc { min-height:70px; color:var(--muted); }
+    .flow { display:flex; align-items:center; gap:8px; margin:14px 0 18px; color:var(--muted); font-size:11px; }
+    .mini-node { background:var(--node); border:1px solid #515661; border-radius:7px; padding:9px; flex:1; min-height:96px; }
+    .mini-node strong { display:block; color:#f2f3f6; margin-bottom:8px; font-size:12px; }
+    .socket { color:var(--green); }
+    .arrow { color:#77808f; font-size:20px; }
+    .selector { background:#272a30; border:1px solid #59606c; border-radius:7px; padding:10px; }
+    .selector-title { font-weight:700; font-size:12px; margin-bottom:9px; }
+    label { display:block; color:var(--muted); font-size:11px; margin:8px 0 3px; }
+    select, .fake-select, button { width:100%; border:1px solid #555b66; border-radius:5px; background:#1d2025; color:var(--text); padding:7px 8px; font:inherit; font-size:12px; }
+    .fake-select { display:flex; justify-content:space-between; }
+    button { margin-top:10px; background:#35547b; border-color:#6e9dd4; cursor:default; }
+    .status { margin-top:10px; padding:7px 8px; border-left:3px solid var(--orange); color:#d9bc8c; background:#3a3023; font-size:11px; }
+    .ok { border-color:var(--green); color:#a8eab2; background:#203526; }
+    .bullets { margin:14px 0 0; padding-left:18px; color:var(--muted); font-size:12px; }
+    .bullets li { margin:5px 0; }
+    .note { margin-top:26px; padding:14px 16px; background:#20242a; border:1px solid var(--line); border-radius:10px; color:var(--muted); }
+    code { color:#c9ddff; }
+    @media (max-width:900px) { .grid { grid-template-columns:1fr; } body { padding:16px; } }
+  </style>
+</head>
+<body>
+  <h1>Ryan Artifact Selector：让用户不用懂 UID</h1>
+  <p class="intro">这是交互讨论稿，不是最终 ComfyUI 页面。三个方案都假设：上游 Agent 已经 Chat → Commit，并且 Queue 过一次；否则节点会明确告诉用户缺哪一步，而不是静默输出空白。</p>
+
+  <main class="grid">
+    <section class="option recommended">
+      <span class="tag">推荐：最少认知负担</span>
+      <h2>A. 自动取上游最新产物</h2>
+      <p class="desc">普通用户只需要选择“我要什么”。来源、ID、revision 全部由系统处理。</p>
+      <div class="flow">
+        <div class="mini-node"><strong>Workflow Agent</strong><span class="socket">●</span> 已提交 Context</div>
+        <span class="arrow">→</span>
+        <div class="mini-node selector"><div class="selector-title">Artifact Selector</div><label>我要输出什么？</label><div class="fake-select">图像提示词 <span>⌄</span></div><div class="status ok">✓ 已连接，自动读取最新产物</div></div>
+        <span class="arrow">→</span>
+        <div class="mini-node"><strong>展示任何</strong><span class="socket">●</span> text</div>
+      </div>
+      <ul class="bullets"><li>默认：自动选择最新有效产物。</li><li>可选：图像提示词 / 分镜提示词 / 视频提示词。</li><li>没有产物时显示：“请先打开上游 Agent，完成 Commit，再 Queue”。</li></ul>
+    </section>
+
+    <section class="option">
+      <h2>B. 简单模式 + 可选高级设置</h2>
+      <p class="desc">默认仍然只看到语义选项；需要选具体镜头时，再展开“我要更精确地选择”。</p>
+      <div class="flow">
+        <div class="mini-node"><strong>Workflow Agent</strong><span class="socket">●</span> Context</div>
+        <span class="arrow">→</span>
+        <div class="mini-node selector"><div class="selector-title">Artifact Selector</div><label>我要输出什么？</label><div class="fake-select">分镜提示词 <span>⌄</span></div><label>需要指定镜头？</label><div class="fake-select">否，自动取第一个 <span>⌄</span></div><button>显示更多选择</button></div>
+        <span class="arrow">→</span>
+        <div class="mini-node"><strong>展示任何</strong><span class="socket">●</span> text</div>
+      </div>
+      <ul class="bullets"><li>普通用户不接触 UID / output_id / kind。</li><li>高级设置也只显示名称和标签。</li><li>适合既要简单默认值、又要偶尔精确选镜头的用户。</li></ul>
+    </section>
+
+    <section class="option">
+      <h2>C. 取消 Selector，Agent 直接输出</h2>
+      <p class="desc">Workflow Agent 直接提供“图像提示词 / 分镜提示词 / 视频提示词”输出口；Selector 只留给少数需要跨 Agent 精确取值的场景。</p>
+      <div class="flow">
+        <div class="mini-node"><strong>Workflow Agent</strong><span class="socket">●</span> image_prompt<br><span class="socket">●</span> storyboard_prompt</div>
+        <span class="arrow">→</span>
+        <div class="mini-node"><strong>展示任何</strong><span class="socket">●</span> text</div>
+      </div>
+      <div class="status ok">✓ 连线即知道输出是什么</div>
+      <ul class="bullets"><li>最直观，适合固定流程。</li><li>节点输出口会变多，画布更宽。</li><li>跨多个上游来源时仍需要 Selector。</li></ul>
+    </section>
+  </main>
+
+  <div class="note"><strong>关键流转：</strong>连线只建立数据关系；<code>Queue</code> 才会执行上游节点；上游必须先 <code>Chat → Commit</code> 生成正式产物。当前空白的直接原因通常是“还没有可读取的结构化产物”，不是用户应该去填写 UID。</div>
+</body>
+</html>

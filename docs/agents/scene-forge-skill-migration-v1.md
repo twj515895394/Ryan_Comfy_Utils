@@ -3,6 +3,8 @@
 > 来源：`twj515895394/scene_forge` 分支 `codex/v10-text-skill-pipeline`
 > 目标：`Ryan_Comfy_Utils` 的 Generic Workflow Agent Starter Skill Pack
 
+> **文档状态：历史迁移基线。** 当前 Ryan Workflow Agent 已扩展为六类 Agent，新增 `audio-director`。音频导演主要向视频提示词导演交接 `Audio Design Canon`；独立 `audio_prompt` 仅按需输出。当前能力与输出合同以 `docs/agents/工作流Agent能力说明-v1.md` 和 `docs/superpowers/specs/2026-08-12-workflow-agent-content-contract-design.md` 为准；本文中的“五阶段 / 五个 Skill”仅描述当时的迁移范围。
+
 ## 1. 迁移结论
 
 SceneForge 当前分支中已经存在一套非常适合 Ryan Workflow Agent V1 的五阶段文本主链：

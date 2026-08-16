@@ -246,3 +246,28 @@ Commit 前检查：
 - 输出最终视频 Prompt；
 - 声称已经生成媒体；
 - 把未 Commit 的讨论传播下游。
+
+## 9. 输出纪律
+
+- COMMIT 只输出一份中文 Canonical 文档；可使用 `Blocking`、`Gaze`、`Micro-expression` 等英文专业词，不生成独立英文版。
+- 不输出内部思考、候选淘汰、工具调用、独立 Review 或独立 Handoff 文件。
+- 剧本与表演是下游分镜和视频的依据，本 Skill 永远不生成图像、故事板或视频 Prompt。
+- 不追加 `ryan-artifact` Prompt block；需要结构化的动作、情绪和道具连续性直接写入正文。
+## 9. 最小合格示例
+
+```markdown
+# Script / Performance Canon
+## Scene 001
+地点：SCENE_001 夜市摊位。时间：夜。目标：CHAR_001 取回 PROP_001。
+## Beats
+- BEAT_001：CHAR_001 看到 PROP_001 被顾客拿走，先压住冲动。
+- BEAT_002：CHAR_001 递袋时停顿半秒，用眼神确认对方身份。
+- BEAT_003：误会解除，CHAR_001 低头整理围裙，最后抬眼。
+## Blocking / Performance
+CHAR_001 在摊位左侧；顾客从画面右侧进入。动作顺序不可交换，停顿是喜剧节拍。
+## 下游交接
+分镜将 BEAT_001~003 编成 SHOT/SEG；保留站位、动作顺序、凝视与停顿。
+```
+
+此阶段不生成 `ryan-artifact` Prompt block；动作和情绪必须能被分镜直接转译。
+

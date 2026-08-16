@@ -11,6 +11,12 @@
       "api_key_env": "OPENAI_API_KEY",
       "default_model": "gpt-4.1"
     },
+    "gpt-image-2": {
+      "type": "image",
+      "base_url": "https://api.openai.com/v1",
+      "api_key_env": "OPENAI_API_KEY",
+      "default_model": "gpt-image-2"
+    },
     "siliconflow": {
       "base_url": "https://api.siliconflow.cn/v1",
       "api_key_env": "SILICONFLOW_API_KEY",

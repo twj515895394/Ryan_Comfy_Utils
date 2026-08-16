@@ -7,6 +7,7 @@ from .cli_runner import run_cli_command
 from .command_expand import expand_cli_command
 from .context_builder import build_context_payload
 from .contracts import validate_result_payload
+from .pi_runner import build_pi_command, probe_pi_cli
 from .session import create_session_record
 from .skill_loader import resolve_skill_directory
 from .template_engine import render_context_template
@@ -107,6 +108,7 @@ def execute_text_session(
     runner_profile: dict,
     image_inputs: list[str] | None = None,
     file_inputs: list[str] | None = None,
+    adapter_skill_directory: str | None = None,
 ) -> dict:
     session_dir = prepare_workspace(workspace_root, session_id)
     if skill_id == "none":
@@ -127,6 +129,10 @@ def execute_text_session(
         file_paths=assets["files"],
         workspace_info={"session_dir": str(session_dir)},
     )
+    # 双 Skill manifest：在渲染前把 adapter Skill 目录注入 payload，
+    # 使模板中的 {adapter_skill_directory} 占位符能被正确替换
+    if adapter_skill_directory:
+        payload["skill"]["adapter_directory"] = str(adapter_skill_directory)
     if skill_id == "none":
         rendered_context = user_text
     else:
@@ -149,17 +155,15 @@ def execute_text_session(
     # Filter out "{context}" from the command line arguments list to avoid Windows CLI length limits
     # and newline truncation. Instead, we always pass the context securely via stdin.
     cmd_template = [arg for arg in runner_profile["command"] if arg != "{context}"]
-
-    # If the CLI tool is claude, dynamically inject --permission-mode bypassPermissions
-    # to prevent interactive prompts from hanging on EOF stdin.
-    is_claude = False
-    for arg in cmd_template[:3]:
-        if "claude" in str(arg).lower():
-            is_claude = True
-            break
-    if is_claude and "--permission-mode" not in cmd_template:
-        cmd_template.append("--permission-mode")
-        cmd_template.append("bypassPermissions")
+    is_pi = runner_profile.get("runner") == "pi_cli"
+    if is_pi:
+        cmd_template = build_pi_command(runner_profile, skill_directory)
+    else:
+        # If the CLI tool is claude, dynamically inject --permission-mode bypassPermissions
+        # to prevent interactive prompts from hanging on EOF stdin.
+        is_claude = any("claude" in str(arg).lower() for arg in cmd_template[:3])
+        if is_claude and "--permission-mode" not in cmd_template:
+            cmd_template.extend(("--permission-mode", "bypassPermissions"))
 
     replacements = {
         "{context_file}": prompt_abs,
@@ -167,7 +171,8 @@ def execute_text_session(
         "{skill_directory}": skill_abs,
     }
     command = expand_cli_command(cmd_template, replacements)
-
+    if is_pi:
+        probe_pi_cli(command)
     env_overrides = dict(runner_profile.get("environment") or {})
     env_overrides.setdefault("RYAN_ACP_CONTEXT_FILE", prompt_abs)
     env_overrides.setdefault("RYAN_ACP_SESSION_DIR", session_abs)
