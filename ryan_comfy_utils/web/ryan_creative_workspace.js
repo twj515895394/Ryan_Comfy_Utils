@@ -1,21 +1,34 @@
 /**
- * Bootstrap only: always show a durable toggle.
- * Heavy panel is lazy-imported so a panel bug cannot hide the entry.
+ * Bootstrap: mount Ryan 构想台 as a real sibling in the same toolbar row as
+ * TE_MAN 构想台 / 资产库 — not a fixed overlay layer.
  */
 import { app } from "../../../scripts/app.js";
 
 const TOGGLE_ID = "ryan-creative-workspace-toggle";
-const STYLE_ID = "ryan-cw-toggle-only-styles";
+const STYLE_ID = "ryan-cw-toggle-dock-styles";
 
 function ensureToggleStyles() {
   if (document.getElementById(STYLE_ID)) return;
   const style = document.createElement("style");
   style.id = STYLE_ID;
+  // Only minor polish; when docked we inherit toolbar button look from siblings.
   style.textContent = `
-  #${TOGGLE_ID}{
+  #${TOGGLE_ID}.ryan-cw-docked{
+    position: static !important;
+    inset: auto !important;
+    top: auto !important;
+    right: auto !important;
+    left: auto !important;
+    bottom: auto !important;
+    z-index: auto !important;
+    margin: 0 0 0 6px !important;
+    flex: 0 0 auto !important;
+    align-self: center !important;
+  }
+  #${TOGGLE_ID}.ryan-cw-fallback{
     position: fixed !important;
     top: 52px !important;
-    right: 132px !important;
+    right: 16px !important;
     z-index: 10080 !important;
     height: 32px !important;
     padding: 0 12px !important;
@@ -25,43 +38,100 @@ function ensureToggleStyles() {
     color: #f3f6ff !important;
     font: 600 12px/32px system-ui,sans-serif !important;
     cursor: pointer !important;
-    white-space: nowrap !important;
     box-shadow: 0 8px 22px rgba(0,0,0,.35) !important;
-  }
-  #${TOGGLE_ID}:hover{ filter: brightness(1.08) !important; }
-  @media (max-width: 1200px){
-    #${TOGGLE_ID}{ right: 12px !important; top: 52px !important; }
   }
   `;
   document.head.appendChild(style);
 }
 
-function placeToggle(btn) {
-  ensureToggleStyles();
-  // Prefer sitting on the action toolbar row next to TE_MAN, but always keep a
-  // body-level fixed fallback so Vue/React redraws cannot erase the only entry.
-  const nodes = [...document.querySelectorAll("button, [role='button'], a")];
-  const labelOf = (n) =>
-    `${n.textContent || ""} ${n.getAttribute?.("aria-label") || ""} ${n.title || ""}`;
-  const te = nodes.find(
-    (n) => n.id !== TOGGLE_ID && labelOf(n).includes("构想台") && !labelOf(n).includes("Ryan")
-  );
-  const asset = nodes.find((n) => labelOf(n).includes("资产库"));
-  const anchor = te || asset;
-  if (anchor?.parentElement) {
-    // Clone visual alignment: keep fixed, but match anchor vertical center if possible.
-    try {
-      const rect = anchor.getBoundingClientRect();
-      if (rect.top > 0 && rect.height > 0) {
-        btn.style.top = `${Math.max(8, Math.round(rect.top + (rect.height - 32) / 2))}px`;
-        const right = Math.max(12, Math.round(window.innerWidth - rect.left + 8));
-        btn.style.right = `${right}px`;
-      }
-    } catch (_err) {
-      /* keep CSS defaults */
-    }
+function labelOf(node) {
+  return `${node?.textContent || ""} ${node?.getAttribute?.("aria-label") || ""} ${node?.title || ""}`
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function isInteractive(node) {
+  if (!node || node.id === TOGGLE_ID) return false;
+  const tag = (node.tagName || "").toLowerCase();
+  if (tag === "button" || tag === "a") return true;
+  if (node.getAttribute?.("role") === "button") return true;
+  if (typeof node.onclick === "function") return true;
+  if (node.className && /btn|button|p-button/i.test(String(node.className))) return true;
+  return false;
+}
+
+function findToolbarAnchor() {
+  const all = [...document.querySelectorAll("button, a, [role='button'], .p-button, [class*='button']")];
+  const te = all.find((n) => {
+    if (!isInteractive(n)) return false;
+    const label = labelOf(n);
+    return label.includes("构想台") && !label.includes("Ryan");
+  });
+  if (te) return te;
+  const asset = all.find((n) => isInteractive(n) && labelOf(n).includes("资产库"));
+  if (asset) return asset;
+  return all.find((n) => isInteractive(n) && labelOf(n).includes("ComfyTV")) || null;
+}
+
+function copyToolbarLook(btn, anchor) {
+  if (!anchor) return;
+  // Match TE_MAN / toolbar control chrome as closely as possible.
+  try {
+    btn.className = `${anchor.className || ""} ryan-cw-docked`.trim();
+  } catch (_err) {
+    btn.className = "ryan-cw-docked";
   }
-  if (!btn.isConnected) document.body.appendChild(btn);
+  // Clear any leftover fixed positioning from previous versions.
+  btn.style.position = "";
+  btn.style.top = "";
+  btn.style.right = "";
+  btn.style.left = "";
+  btn.style.bottom = "";
+  btn.style.zIndex = "";
+  btn.style.boxShadow = "";
+  // Prefer anchor computed metrics when classes alone are insufficient.
+  try {
+    const cs = getComputedStyle(anchor);
+    if (cs.height && cs.height !== "auto") btn.style.height = cs.height;
+    if (cs.borderRadius) btn.style.borderRadius = cs.borderRadius;
+    if (cs.fontSize) btn.style.fontSize = cs.fontSize;
+    if (cs.fontWeight) btn.style.fontWeight = cs.fontWeight;
+    if (cs.padding && cs.padding !== "0px") btn.style.padding = cs.padding;
+  } catch (_err) {
+    /* ignore */
+  }
+}
+
+function dockBesideAnchor(btn, anchor) {
+  const parent = anchor.parentElement;
+  if (!parent) return false;
+  copyToolbarLook(btn, anchor);
+  btn.classList.add("ryan-cw-docked");
+  btn.classList.remove("ryan-cw-fallback");
+
+  const label = labelOf(anchor);
+  // Insert immediately before TE_MAN 构想台; otherwise after 资产库/ComfyTV.
+  if (label.includes("构想台") && !label.includes("Ryan")) {
+    if (btn.parentElement !== parent || btn.nextSibling !== anchor) {
+      parent.insertBefore(btn, anchor);
+    }
+  } else if (btn.parentElement !== parent || btn.previousSibling !== anchor) {
+    anchor.insertAdjacentElement("afterend", btn);
+  }
+  return parent.contains(btn);
+}
+
+function fallbackFixed(btn) {
+  btn.classList.remove("ryan-cw-docked");
+  btn.classList.add("ryan-cw-fallback");
+  // reset className pollution from anchor copy
+  if (!btn.className.includes("ryan-cw-fallback")) {
+    btn.className = "ryan-cw-fallback";
+  }
+  btn.style.height = "";
+  btn.style.padding = "";
+  btn.style.borderRadius = "";
+  if (btn.parentElement !== document.body) document.body.appendChild(btn);
 }
 
 function ensureToggle(onClick) {
@@ -79,7 +149,14 @@ function ensureToggle(onClick) {
       onClick();
     });
   }
-  placeToggle(btn);
+
+  const anchor = findToolbarAnchor();
+  if (anchor) {
+    const ok = dockBesideAnchor(btn, anchor);
+    if (!ok) fallbackFixed(btn);
+  } else {
+    fallbackFixed(btn);
+  }
   return btn;
 }
 
@@ -109,21 +186,28 @@ async function togglePanel() {
 
 function bootToggle() {
   try {
-    const btn = ensureToggle(() => {
-      togglePanel();
-    });
-    // Keep alive against toolbar redraws / SPA updates.
+    ensureToggle(() => togglePanel());
     if (!globalThis.__ryanCwToggleGuard) {
       globalThis.__ryanCwToggleGuard = setInterval(() => {
         const existing = document.getElementById(TOGGLE_ID);
+        // If TE_MAN re-rendered toolbar and dropped us, re-dock as sibling again.
+        const anchor = findToolbarAnchor();
         if (!existing || !existing.isConnected) {
           ensureToggle(() => togglePanel());
-        } else {
-          placeToggle(existing);
+          return;
         }
-      }, 1500);
+        if (anchor && existing.parentElement !== anchor.parentElement) {
+          dockBesideAnchor(existing, anchor);
+        } else if (anchor) {
+          // keep order stable before 构想台
+          const label = labelOf(anchor);
+          if (label.includes("构想台") && !label.includes("Ryan") && existing.nextSibling !== anchor) {
+            anchor.parentElement?.insertBefore(existing, anchor);
+          }
+        }
+      }, 1200);
     }
-    console.info("[Ryan Creative Workspace] toggle ready", btn?.id);
+    console.info("[Ryan Creative Workspace] toolbar toggle docked");
   } catch (err) {
     console.error("[Ryan Creative Workspace] toggle boot failed", err);
   }
