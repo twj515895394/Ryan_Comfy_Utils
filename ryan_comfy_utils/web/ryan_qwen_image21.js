@@ -1136,14 +1136,14 @@ function installQwenStyles() {
   const style = document.createElement("style");
   style.id = "ryan-qwen-image21-styles";
   style.textContent = `
-    .ryan-qwen-workbench { display:flex; flex-direction:column; gap:8px; width:auto; min-width:0; min-height:0; box-sizing:border-box; margin:2px 10px 10px; color:var(--input-text,#ddd); font-family:system-ui,-apple-system,"Segoe UI",sans-serif; }
-    .ryan-qwen-image-gallery { display:grid; grid-auto-rows:max-content; gap:4px; min-width:0; margin:2px 10px 8px; color:var(--input-text,#ddd); font-family:system-ui,-apple-system,"Segoe UI",sans-serif; }
+    .ryan-qwen-workbench { display:flex; flex-direction:column; gap:8px; width:100%; max-width:100%; min-width:0; min-height:0; box-sizing:border-box; margin:2px 0 10px; padding:0 10px; overflow:hidden; color:var(--input-text,#ddd); font-family:system-ui,-apple-system,"Segoe UI",sans-serif; }
+    .ryan-qwen-image-gallery { display:grid; grid-auto-rows:max-content; gap:4px; width:100%; max-width:100%; min-width:0; box-sizing:border-box; margin:2px 0 8px; padding:0 10px; overflow:hidden; color:var(--input-text,#ddd); font-family:system-ui,-apple-system,"Segoe UI",sans-serif; }
     .ryan-qwen-image-heading { display:flex; align-items:center; justify-content:space-between; min-width:0; color:rgba(255,255,255,.56); font-size:10px; font-weight:650; line-height:16px; letter-spacing:.035em; }
     .ryan-qwen-image-heading-label { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     .ryan-qwen-image-toggle { appearance:none; padding:0 4px; border:0; border-radius:3px; background:transparent; color:rgba(255,255,255,.55); cursor:pointer; font:600 10px/16px system-ui,sans-serif; }
     .ryan-qwen-image-toggle:hover,.ryan-qwen-image-toggle:focus-visible { background:rgba(0,226,187,.12); color:rgba(255,255,255,.9); outline:none; }
     .ryan-qwen-prompt-heading { color:rgba(255,255,255,.56); font-size:10px; font-weight:650; line-height:16px; letter-spacing:.035em; }
-    .ryan-qwen-image-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:4px; width:100%; min-width:0; box-sizing:border-box; }
+    .ryan-qwen-image-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:4px; width:100%; max-width:100%; min-width:0; box-sizing:border-box; }
     .ryan-qwen-image-slot { appearance:none; position:relative; display:flex; align-items:center; justify-content:center; min-width:0; height:72px; overflow:hidden; box-sizing:border-box; padding:0; border:1px dashed rgba(255,255,255,.18); border-radius:7px; background:rgba(255,255,255,.035); color:rgba(255,255,255,.48); cursor:pointer; transition:border-color .12s ease,background-color .12s ease,opacity .12s ease,transform .12s ease; }
     .ryan-qwen-image-slot:hover,.ryan-qwen-image-slot:focus-visible,.ryan-qwen-image-slot.is-dragover { border-color:rgba(0,226,187,.64); background:rgba(0,226,187,.075); outline:none; }
     .ryan-qwen-image-slot.has-image[draggable="true"] { cursor:grab; }

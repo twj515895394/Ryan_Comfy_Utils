@@ -45,6 +45,8 @@ test("Qwen gallery supports sorting, deletion, and external input visibility", (
 test("Qwen gallery follows the H3-style in-node image workbench layout", () => {
   assert.match(source, /ryan-qwen-image-grid/);
   assert.match(source, /grid-template-columns:repeat\(4/);
+  assert.match(source, /max-width:100%/);
+  assert.match(source, /padding:0 10px/);
   assert.match(source, /ryan-qwen-image-slot/);
   assert.match(source, /ryan-qwen-image-toggle/);
   assert.match(source, /展开其余/);
