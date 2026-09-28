@@ -49,6 +49,25 @@ function setWidgetValue(node, name, value) {
   if (widget._state) widget._state.value = value;
 }
 
+function formatQwenMegapixelOption(value) {
+  const numeric = Number(value);
+  if (!QWEN_MEGAPIXEL_OPTIONS.some((option) => option === numeric)) return String(value ?? "");
+  return Number.isInteger(numeric) ? numeric.toFixed(1) : String(numeric);
+}
+
+function ensureQwenMegapixelDisplay(node) {
+  const widget = findWidget(node, "megapixels");
+  if (!widget) return;
+  widget.options ||= {};
+  if (widget.options.__ryanQwenMegapixelLabelPatched) return;
+  const original = widget.options.getOptionLabel;
+  widget.options.getOptionLabel = (value) => {
+    const formatted = formatQwenMegapixelOption(value);
+    return formatted || (typeof original === "function" ? original(value) : String(value ?? ""));
+  };
+  widget.options.__ryanQwenMegapixelLabelPatched = true;
+}
+
 function ensureQwenNumericDefaults(node) {
   let resolution = findWidget(node, "resolution");
   const legacyResolution = findWidget(node, "reference_resolution");
@@ -77,6 +96,7 @@ function ensureQwenNumericDefaults(node) {
     }
     if (!valid) setWidgetValue(node, name, fallback);
   }
+  ensureQwenMegapixelDisplay(node);
 }
 
 function ensureQwenPromptInput(node) {
