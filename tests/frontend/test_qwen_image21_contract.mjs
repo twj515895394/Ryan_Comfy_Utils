@@ -15,6 +15,9 @@ test("Qwen Image 2.1 frontend owns a sixteen-slot node extension", () => {
   assert.match(source, /QWEN_NUMERIC_DEFAULTS/);
   assert.match(source, /megapixels: 1\.0/);
   assert.match(source, /resolution: 1024/);
+  assert.match(source, /Number\.isInteger\(value\) && value >= 1 && value <= 64/);
+  assert.match(source, /value === 0 \|\| value % 32 === 0/);
+  assert.match(source, /QWEN_MEGAPIXEL_OPTIONS\.find/);
   assert.match(source, /beforeRegisterNodeDef/);
   assert.doesNotMatch(source, /COUNT_WIDGET|image_slot_count/);
 });

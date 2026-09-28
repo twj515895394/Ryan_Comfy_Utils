@@ -55,23 +55,27 @@ function ensureQwenNumericDefaults(node) {
   if (!resolution && legacyResolution) {
     legacyResolution.name = "resolution";
     resolution = legacyResolution;
-    const legacyValue = Number(resolution.value);
-    if (!Number.isFinite(legacyValue) || (legacyValue !== 0 && legacyValue % 32 !== 0)) {
-      setWidgetValue(node, "resolution", QWEN_NUMERIC_DEFAULTS.resolution);
-    }
   }
   for (const [name, fallback] of Object.entries(QWEN_NUMERIC_DEFAULTS)) {
     const widget = findWidget(node, name);
     if (!widget) continue;
     const value = Number(widget.value);
-    if (name === "megapixels" && Number.isFinite(value)) {
+    let valid = Number.isFinite(value);
+    if (name === "megapixels") {
       const option = QWEN_MEGAPIXEL_OPTIONS.find((candidate) => candidate === value);
-      if (option !== undefined) {
-        setWidgetValue(node, name, String(option));
-        continue;
-      }
+      valid = option !== undefined;
+      if (valid) setWidgetValue(node, name, String(option));
+    } else if (name === "batch_size") {
+      valid = Number.isInteger(value) && value >= 1 && value <= 64;
+    } else if (name === "resolution") {
+      // Resolution 1 (or any other value not aligned to 32) is a stale
+      // serialized widget value, not a valid Qwen reference resolution.
+      valid = Number.isInteger(value)
+        && value >= 0
+        && value <= 4096
+        && (value === 0 || value % 32 === 0);
     }
-    if (!Number.isFinite(value)) setWidgetValue(node, name, fallback);
+    if (!valid) setWidgetValue(node, name, name === "megapixels" ? String(fallback) : fallback);
   }
 }
 

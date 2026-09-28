@@ -97,6 +97,7 @@ def test_node_input_contract_keeps_simple_qwen_controls_and_sixteen_slots():
     assert inputs["required"]["megapixels"][1]["default"] == DEFAULT_MEGAPIXELS
     assert inputs["required"]["resolution"][1]["default"] == 1024
     assert "reference_resolution" not in inputs["required"]
+    assert inputs["required"]["batch_size"][1]["default"] == 1
     assert inputs["required"]["batch_size"][1]["max"] == 64
     assert inputs["required"]["prompt"][1]["multiline"] is True
     assert inputs["required"]["prompt"][1]["dynamicPrompts"] is True
