@@ -419,10 +419,8 @@ class RyanQwenImage21:
             optional[f"image_{index:02d}"] = ("IMAGE",)
             optional[f"gallery_{index:02d}"] = _empty_hidden_input()
 
-        hidden = {
-            "gallery_manifest": _empty_hidden_input("[]"),
-            "prompt_mentions": _empty_hidden_input("[]"),
-        }
+        optional["gallery_manifest"] = _empty_hidden_input("[]")
+        optional["prompt_mentions"] = _empty_hidden_input("[]")
         return {
             "required": {
                 "clip": ("CLIP",),
@@ -453,7 +451,6 @@ class RyanQwenImage21:
                 "image_slot_count": ("INT", {"default": 2, "min": 0, "max": MAX_IMAGE_SLOTS, "step": 1}),
             },
             "optional": optional,
-            "hidden": hidden,
         }
 
     RETURN_TYPES = ("CONDITIONING", "CONDITIONING", "LATENT")

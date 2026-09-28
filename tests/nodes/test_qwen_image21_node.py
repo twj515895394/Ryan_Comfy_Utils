@@ -93,6 +93,9 @@ def test_node_input_contract_contains_qwen_controls_and_sixteen_slots():
         "custom",
     ]
     assert all(f"image_{index:02d}" in inputs["optional"] for index in range(1, 17))
+    assert "gallery_manifest" in inputs["optional"]
+    assert "prompt_mentions" in inputs["optional"]
+    assert "hidden" not in inputs
 
 
 def test_node_encodes_text_and_returns_qwen_latent_without_images():
