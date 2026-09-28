@@ -32,6 +32,15 @@ class FakeClip:
         return [[tokens]]
 
 
+class FakeVAE:
+    def __init__(self):
+        self.inputs = []
+
+    def encode(self, image):
+        self.inputs.append(image)
+        return {"reference": len(self.inputs), "shape": tuple(image.shape)}
+
+
 def test_all_official_aspect_ratios_produce_aligned_dimensions():
     for aspect_ratio in ASPECT_RATIOS:
         width, height = calculate_qwen_resolution(aspect_ratio, 2.0)
@@ -265,3 +274,43 @@ def test_node_replaces_mentions_before_qwen_tokenization():
 
     assert clip.tokenize_calls[0][0] == "Picture 1 is the identity"
     assert clip.tokenize_calls[1][0] == "not Picture 1"
+
+
+def test_vae_reference_latents_are_appended_to_both_conditionings(monkeypatch):
+    import node_helpers
+
+    conditioning_calls = []
+
+    def fake_conditioning_set_values(conditioning, values, append=False):
+        conditioning_calls.append((conditioning, values, append))
+        return {"conditioning": conditioning, "values": values}
+
+    monkeypatch.setattr(node_helpers, "conditioning_set_values", fake_conditioning_set_values)
+    clip = FakeClip()
+    vae = FakeVAE()
+    image = torch.zeros((1, 32, 48, 4), dtype=torch.float32)
+
+    outputs = RyanQwenImage21().encode(
+        clip=clip,
+        prompt="keep the character",
+        negative_prompt="wrong face",
+        resolution_mode="custom",
+        aspect_ratio="1:1 (Square)",
+        megapixels=2.0,
+        width=1024,
+        height=768,
+        batch_size=1,
+        reference_resolution=0,
+        image_slot_count=1,
+        vae=vae,
+        image_01=image,
+    )
+
+    assert len(vae.inputs) == 1
+    assert vae.inputs[0].shape == (1, 32, 64, 4)
+    assert len(conditioning_calls) == 2
+    assert all(call[2] is True for call in conditioning_calls)
+    assert all(call[1]["reference_latents"] == [{"reference": 1, "shape": (1, 32, 64, 4)}] for call in conditioning_calls)
+    assert all(call[1]["reference_latents"] for call in conditioning_calls)
+    assert outputs[2]["samples"].shape == (1, 64, 48, 64)
+    assert all(call[1]["keep_vision"] is False for call in clip.tokenize_calls)

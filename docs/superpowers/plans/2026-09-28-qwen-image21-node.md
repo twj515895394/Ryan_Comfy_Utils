@@ -169,19 +169,19 @@ rtk git commit -m "feat: add stable Qwen image mentions"
 - Modify: `ryan_comfy_utils/nodes/qwen_image21_node.py`
 - Modify: `tests/nodes/test_qwen_image21_node.py`
 
-- [ ] **Step 1: 写 fake VAE 测试**
+- [x] **Step 1: 写 fake VAE 测试**
 
 使用 fake CLIP 和 fake VAE 验证无 VAE、多图有 VAE、alpha 图片、空槽位和 reference latent 数量；断言 Positive/Negative 都收到 `reference_latents`。
 
-- [ ] **Step 2: 实现参考图预处理**
+- [x] **Step 2: 实现参考图预处理**
 
 按 `reference_resolution` 保持比例缩放到约定面积并按 32 对齐；vision tensor 将 alpha 合成白底；VAE 输入保留适合官方编码的图像 tensor。
 
-- [ ] **Step 3: 接入 reference latents**
+- [x] **Step 3: 接入 reference latents**
 
 VAE 存在时对每张有效参考图调用 `vae.encode`，设置官方 `keep_vision` 行为，并使用 `node_helpers.conditioning_set_values(..., append=True)` 同时追加到 Positive 和 Negative。VAE 不存在时保持视觉 token 路径。
 
-- [ ] **Step 4: 运行测试并提交第 04 票**
+- [x] **Step 4: 运行测试并提交第 04 票**
 
 运行：
 
