@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import math
+import json
+from pathlib import Path
 from typing import Any
 
 import torch
@@ -139,6 +141,166 @@ def build_qwen_latent(batch_size: int, width: int, height: int) -> dict[str, tor
     return {"samples": samples}
 
 
+def image_slot_name(index: int) -> str:
+    if index < 1 or index > MAX_IMAGE_SLOTS:
+        raise ValueError(f"image slot index must be 1..{MAX_IMAGE_SLOTS}")
+    return f"image_{index:02d}"
+
+
+def gallery_slot_name(index: int) -> str:
+    if index < 1 or index > MAX_IMAGE_SLOTS:
+        raise ValueError(f"gallery slot index must be 1..{MAX_IMAGE_SLOTS}")
+    return f"gallery_{index:02d}"
+
+
+def _parse_gallery_manifest(value: str | list[dict[str, Any]] | None) -> list[dict[str, Any]]:
+    if not value:
+        return []
+    if isinstance(value, list):
+        data = value
+    else:
+        try:
+            data = json.loads(value)
+        except (TypeError, json.JSONDecodeError) as exc:
+            raise ValueError("gallery_manifest must be valid JSON") from exc
+    if not isinstance(data, list):
+        raise ValueError("gallery_manifest must be a JSON list")
+    return [item for item in data if isinstance(item, dict)]
+
+
+def _manifest_entry_for_slot(
+    manifest: list[dict[str, Any]],
+    slot: int,
+) -> dict[str, Any]:
+    for entry in manifest:
+        entry_slot = entry.get("slot", entry.get("source_slot"))
+        try:
+            if int(entry_slot) == slot:
+                return entry
+        except (TypeError, ValueError):
+            continue
+    return {}
+
+
+def _annotated_path_from_value(value: Any) -> str:
+    if isinstance(value, str):
+        return value
+    if not isinstance(value, dict):
+        return ""
+    name = str(value.get("name") or "")
+    subfolder = str(value.get("subfolder") or "").strip("/")
+    file_type = str(value.get("type") or "input")
+    if not name:
+        return ""
+    raw = f"{subfolder}/{name}" if subfolder else name
+    if file_type and file_type != "input":
+        raw = f"{raw} [type={file_type}]"
+    return raw
+
+
+def _load_gallery_image(annotated_path: str) -> torch.Tensor:
+    if not annotated_path:
+        raise ValueError("gallery image path is empty")
+
+    import folder_paths
+    import node_helpers
+    import numpy as np
+    from PIL import Image, ImageOps
+
+    if not folder_paths.exists_annotated_filepath(annotated_path):
+        raise ValueError(f"Ryan Qwen Image 2.1 gallery file does not exist: {annotated_path}")
+
+    path = folder_paths.get_annotated_filepath(annotated_path)
+    image = node_helpers.pillow(Image.open, path)
+    image = node_helpers.pillow(ImageOps.exif_transpose, image)
+    mode = "RGBA" if "A" in image.getbands() else "RGB"
+    array = np.asarray(image.convert(mode)).astype(np.float32) / 255.0
+    return torch.from_numpy(array)[None, ...]
+
+
+def collect_image_sources(
+    image_slots: dict[str, Any],
+    gallery_slots: dict[str, str],
+    gallery_manifest: str | list[dict[str, Any]] | None = None,
+) -> list[dict[str, Any]]:
+    """Collect external and gallery images in stable slot order.
+
+    External IMAGE tensors take precedence over the gallery in the same slot.
+    The returned records are compacted by active slot while retaining a stable
+    asset id for later mention resolution.
+    """
+
+    manifest = _parse_gallery_manifest(gallery_manifest)
+    assets: list[dict[str, Any]] = []
+    for slot in range(1, MAX_IMAGE_SLOTS + 1):
+        image = image_slots.get(image_slot_name(slot))
+        entry = _manifest_entry_for_slot(manifest, slot)
+        if image is not None:
+            assets.append(
+                {
+                    "asset_id": f"external-slot-{slot:02d}",
+                    "source": "external",
+                    "slot": slot,
+                    "filename": entry.get("filename") or f"image_{slot:02d}",
+                    "image": image[:1],
+                }
+            )
+            continue
+
+        gallery_value = gallery_slots.get(gallery_slot_name(slot))
+        if not gallery_value:
+            continue
+        path_value = _annotated_path_from_value(gallery_value)
+        assets.append(
+            {
+                "asset_id": entry.get("asset_id") or f"gallery-slot-{slot:02d}",
+                "source": "gallery",
+                "slot": slot,
+                "filename": entry.get("filename") or Path(path_value).name,
+                "path": path_value,
+                "image": _load_gallery_image(path_value),
+            }
+        )
+    return assets
+
+
+def _resize_reference_image(image: torch.Tensor, reference_resolution: int) -> torch.Tensor:
+    import comfy.utils
+
+    samples = image[:1].movedim(-1, 1)
+    if reference_resolution > 0:
+        ratio = samples.shape[3] / samples.shape[2]
+        width = round(math.sqrt(reference_resolution * reference_resolution * ratio) / QWEN_REFERENCE_MULTIPLE) * QWEN_REFERENCE_MULTIPLE
+        height = round(math.sqrt(reference_resolution * reference_resolution / ratio) / QWEN_REFERENCE_MULTIPLE) * QWEN_REFERENCE_MULTIPLE
+    else:
+        width = round(samples.shape[3] / QWEN_REFERENCE_MULTIPLE) * QWEN_REFERENCE_MULTIPLE
+        height = round(samples.shape[2] / QWEN_REFERENCE_MULTIPLE) * QWEN_REFERENCE_MULTIPLE
+
+    width = max(QWEN_REFERENCE_MULTIPLE, width)
+    height = max(QWEN_REFERENCE_MULTIPLE, height)
+    if (width, height) == (samples.shape[3], samples.shape[2]):
+        return image[:1]
+    return comfy.utils.common_upscale(samples, width, height, "lanczos", "disabled").movedim(1, -1)
+
+
+def prepare_qwen_reference_images(
+    assets: list[dict[str, Any]],
+    reference_resolution: int,
+    vae=None,
+) -> tuple[list[torch.Tensor], list[torch.Tensor]]:
+    images_vl: list[torch.Tensor] = []
+    ref_latents: list[torch.Tensor] = []
+    for asset in assets:
+        resized = _resize_reference_image(asset["image"], int(reference_resolution))
+        rgb = resized[:, :, :, :3]
+        if resized.shape[-1] > 3:
+            rgb = rgb * resized[:, :, :, 3:] + (1.0 - resized[:, :, :, 3:])
+        images_vl.append(rgb)
+        if vae is not None:
+            ref_latents.append(vae.encode(resized))
+    return images_vl, ref_latents
+
+
 def _empty_hidden_input(default: str = "") -> tuple[str, dict[str, Any]]:
     return ("STRING", {"default": default, "multiline": True, "hidden": True})
 
@@ -216,7 +378,6 @@ class RyanQwenImage21:
         prompt_mentions: str = "[]",
         **kwargs,
     ):
-        del reference_resolution, gallery_manifest, prompt_mentions, vae
         output_width, output_height = resolve_output_resolution(
             resolution_mode,
             aspect_ratio,
@@ -225,11 +386,22 @@ class RyanQwenImage21:
             height,
         )
 
-        # Image inputs are intentionally ignored in Task 1. The image
-        # collection and Qwen vision path are added in the gallery slice.
-        del image_slot_count, kwargs
-        images_vl: list[torch.Tensor] = []
-        keep_vision = True
+        del image_slot_count, prompt_mentions
+        image_slots = {
+            image_slot_name(index): kwargs.get(image_slot_name(index))
+            for index in range(1, MAX_IMAGE_SLOTS + 1)
+        }
+        gallery_slots = {
+            gallery_slot_name(index): kwargs.get(gallery_slot_name(index), "")
+            for index in range(1, MAX_IMAGE_SLOTS + 1)
+        }
+        assets = collect_image_sources(image_slots, gallery_slots, gallery_manifest)
+        images_vl, ref_latents = prepare_qwen_reference_images(
+            assets,
+            int(reference_resolution),
+            vae=vae,
+        )
+        keep_vision = len(ref_latents) == 0
         positive_tokens = clip.tokenize(
             prompt,
             images=images_vl,
@@ -244,6 +416,19 @@ class RyanQwenImage21:
         )
         positive = clip.encode_from_tokens_scheduled(positive_tokens)
         negative = clip.encode_from_tokens_scheduled(negative_tokens)
+        if ref_latents:
+            import node_helpers
+
+            positive = node_helpers.conditioning_set_values(
+                positive,
+                {"reference_latents": ref_latents},
+                append=True,
+            )
+            negative = node_helpers.conditioning_set_values(
+                negative,
+                {"reference_latents": ref_latents},
+                append=True,
+            )
         latent = build_qwen_latent(batch_size, output_width, output_height)
         return (positive, negative, latent)
 
@@ -254,6 +439,8 @@ __all__ = [
     "RyanQwenImage21",
     "build_qwen_latent",
     "calculate_qwen_resolution",
+    "collect_image_sources",
     "normalize_custom_resolution",
+    "prepare_qwen_reference_images",
     "resolve_output_resolution",
 ]

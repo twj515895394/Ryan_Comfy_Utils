@@ -85,23 +85,23 @@ rtk git commit -m "feat: add Qwen Image 2.1 conditioning node"
 - Test: `tests/nodes/test_qwen_image21_node.py`
 - Test: `tests/frontend/test_qwen_image21_contract.mjs`
 
-- [ ] **Step 1: 写多图收集和文件错误测试**
+- [x] **Step 1: 写多图收集和文件错误测试**
 
 测试外部 `IMAGE` 优先于同槽位画廊图片、空槽位压缩、按槽位排序、batch 取第一张、文件不存在错误和 16 槽位输入契约。
 
-- [ ] **Step 2: 实现安全画廊加载和图片收集**
+- [x] **Step 2: 实现安全画廊加载和图片收集**
 
 实现 `collect_image_sources` 和 `load_gallery_image`：外部 tensor 优先；否则验证 annotated filepath，再通过 `folder_paths.get_annotated_filepath` 和 ComfyUI Pillow helper 加载；对图片做 EXIF transpose、参考尺寸缩放和 tensor 转换。保留稳定资源 ID 与当前槽位信息。
 
-- [ ] **Step 3: 把收集结果接入官方 Qwen 图像编码**
+- [x] **Step 3: 把收集结果接入官方 Qwen 图像编码**
 
 参考图按槽位顺序生成 `images_vl`。vision 输入对 alpha 做白底合成；没有 VAE 时 `keep_vision=True`。将 `images_vl` 传入 Positive/Negative 的官方 tokenizer 调用，确保没有 `@` 也会传入所有有效图片。
 
-- [ ] **Step 4: 实现独立前端槽位与画廊状态**
+- [x] **Step 4: 实现独立前端槽位与画廊状态**
 
 新前端只匹配 `Ryan Qwen Image 2.1`。预注册 16 个槽位，根据 `image_slot_count` 控制可见性；支持上传、拖拽、删除、排序、稳定资源 ID 和外部连接占用状态。上传只使用 ComfyUI `/upload/image`，保存返回的 annotated filepath 元数据，不保存绝对路径。
 
-- [ ] **Step 5: 运行后端和前端契约测试**
+- [x] **Step 5: 运行后端和前端契约测试**
 
 运行：
 
@@ -112,7 +112,7 @@ node --test tests/frontend/test_qwen_image21_contract.mjs
 
 预期：内部/外部图片来源行为通过，现有前端测试不受影响。
 
-- [ ] **Step 6: 提交第 02 票**
+- [x] **Step 6: 提交第 02 票**
 
 ```powershell
 rtk git add ryan_comfy_utils/nodes/qwen_image21_node.py ryan_comfy_utils/web/ryan_qwen_image21.js tests/nodes/test_qwen_image21_node.py tests/frontend/test_qwen_image21_contract.mjs

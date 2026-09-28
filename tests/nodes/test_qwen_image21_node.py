@@ -9,7 +9,9 @@ from ryan_comfy_utils.nodes.qwen_image21_node import (
     RyanQwenImage21,
     build_qwen_latent,
     calculate_qwen_resolution,
+    collect_image_sources,
     normalize_custom_resolution,
+    prepare_qwen_reference_images,
     resolve_output_resolution,
 )
 
@@ -102,4 +104,86 @@ def test_node_encodes_text_and_returns_qwen_latent_without_images():
     assert outputs[2]["samples"].shape == (2, 64, 48, 64)
     assert [call[0] for call in clip.tokenize_calls] == ["a red fox", "blurry"]
     assert all(call[1]["images"] == [] for call in clip.tokenize_calls)
+    assert all(call[1]["keep_vision"] is True for call in clip.tokenize_calls)
+
+
+def test_external_images_are_collected_in_slot_order_and_compacted():
+    first = torch.zeros((2, 32, 48, 3), dtype=torch.float32)
+    second = torch.zeros((1, 40, 24, 3), dtype=torch.float32)
+    assets = collect_image_sources(
+        {"image_01": first, "image_02": None, "image_03": second},
+        {},
+        "[]",
+    )
+
+    assert [asset["slot"] for asset in assets] == [1, 3]
+    assert [asset["asset_id"] for asset in assets] == [
+        "external-slot-01",
+        "external-slot-03",
+    ]
+    assert [asset["image"].shape[0] for asset in assets] == [1, 1]
+
+
+def test_external_image_wins_over_same_slot_gallery_image():
+    image = torch.zeros((1, 32, 32, 3), dtype=torch.float32)
+    assets = collect_image_sources(
+        {"image_01": image},
+        {"gallery_01": "missing-gallery-file.png"},
+        "[]",
+    )
+
+    assert len(assets) == 1
+    assert assets[0]["source"] == "external"
+
+
+def test_missing_gallery_image_raises_a_readable_error():
+    try:
+        collect_image_sources(
+            {"image_01": None},
+            {"gallery_01": "missing-gallery-file.png"},
+            "[]",
+        )
+    except ValueError as exc:
+        assert "gallery file does not exist" in str(exc)
+    else:
+        raise AssertionError("a missing gallery file should fail")
+
+
+def test_reference_images_are_resized_and_alpha_is_composited_for_vision():
+    rgba = torch.zeros((1, 32, 48, 4), dtype=torch.float32)
+    rgba[:, :, :, 0] = 1.0
+    rgba[:, :, :, 3] = 0.5
+    images_vl, ref_latents = prepare_qwen_reference_images(
+        [{"asset_id": "a", "image": rgba}],
+        reference_resolution=0,
+    )
+
+    assert ref_latents == []
+    assert images_vl[0].shape[-1] == 3
+    assert images_vl[0].shape[1:3] == (32, 64)
+    assert torch.allclose(images_vl[0][:, 0, 0, 0], torch.tensor([1.0]))
+    assert torch.allclose(images_vl[0][:, 0, 0, 1], torch.tensor([0.5]), atol=0.01)
+
+
+def test_node_passes_all_external_images_to_qwen_without_vae():
+    clip = FakeClip()
+    image = torch.zeros((1, 32, 32, 3), dtype=torch.float32)
+    RyanQwenImage21().encode(
+        clip=clip,
+        prompt="combine references",
+        negative_prompt="blurry",
+        resolution_mode="custom",
+        aspect_ratio="1:1 (Square)",
+        megapixels=2.0,
+        width=1024,
+        height=1024,
+        batch_size=1,
+        reference_resolution=0,
+        image_slot_count=2,
+        image_01=image,
+        image_02=image,
+    )
+
+    assert len(clip.tokenize_calls) == 2
+    assert all(len(call[1]["images"]) == 2 for call in clip.tokenize_calls)
     assert all(call[1]["keep_vision"] is True for call in clip.tokenize_calls)
