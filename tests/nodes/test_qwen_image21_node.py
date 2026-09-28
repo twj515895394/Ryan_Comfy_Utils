@@ -150,7 +150,10 @@ def test_external_image_wins_over_same_slot_gallery_image():
     assert assets[0]["source"] == "external"
 
 
-def test_missing_gallery_image_raises_a_readable_error():
+def test_missing_gallery_image_raises_a_readable_error(monkeypatch):
+    import folder_paths
+
+    monkeypatch.setattr(folder_paths, "exists_annotated_filepath", lambda _value: False)
     try:
         collect_image_sources(
             {"image_01": None},

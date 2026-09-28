@@ -202,7 +202,7 @@ rtk git commit -m "feat: add Qwen reference VAE latents"
 - Modify: `tests/frontend/test_qwen_image21_contract.mjs` if persistence contracts need expansion
 - Modify: `.scratch/qwen-image21-node/issues/05-official-workflow-acceptance.md` to record completion evidence
 
-- [ ] **Step 1: 运行全量相关测试**
+- [x] **Step 1: 运行全量相关测试**
 
 运行：
 
@@ -211,9 +211,11 @@ X:/ComfyUI-aki-v2/python/python.exe -m pytest tests/nodes/test_qwen_image21_node
 node --test tests/frontend/test_qwen_image21_contract.mjs
 ```
 
-- [ ] **Step 2: 做官方工作流静态替换检查**
+结果：Qwen 后端专项测试 `18 passed`，前端契约测试 `4 passed`，JS 语法检查通过；全量测试为 `398 passed, 2 failed`。剩余两项失败均位于已有的 `tests/workflow_agent/test_skill_contracts.py`，对应用户当前已有的 skill contract 修改，与本功能无关。
 
-确认 Ryan 节点可以提供官方工作流 KSampler 所需的 Positive、Negative 和 latent；确认模型、采样器、VAE Decode 和保存节点仍为外部连接。
+- [x] **Step 2: 做官方工作流静态替换检查**
+
+已确认官方工作流的 `TextEncodeQwenImage21`、`ResolutionSelector`、`EmptyLatentImage` 与 `KSampler` 连接关系；Ryan 节点提供 `CONDITIONING`、`CONDITIONING`、`LATENT` 三个输出，并保留模型、采样器、VAE Decode 和保存节点的外部控制。
 
 - [ ] **Step 3: 做 ComfyUI 人工验收**
 
@@ -221,7 +223,7 @@ node --test tests/frontend/test_qwen_image21_contract.mjs
 
 - [ ] **Step 4: 记录验收并提交回归票**
 
-在第 05 票中记录自动化测试和人工验收结果；确认现有 Ryan 多图节点没有前端回归后提交：
+人工验收完成后，在第 05 票中补全结果；当前已记录自动化与静态检查证据，暂不将人工验收标记为完成：
 
 ```powershell
 rtk git add tests/nodes/test_qwen_image21_node.py tests/frontend/test_qwen_image21_contract.mjs .scratch/qwen-image21-node/issues/05-official-workflow-acceptance.md
