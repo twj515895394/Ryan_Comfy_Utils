@@ -5,6 +5,7 @@ from __future__ import annotations
 import math
 import json
 import re
+import unicodedata
 from pathlib import Path
 from typing import Any
 
@@ -212,18 +213,27 @@ def _gallery_path_candidate(value: Any) -> str:
     generation into a failed reference-image load.
     """
 
-    path = _annotated_path_from_value(value)
+    path = _strip_gallery_invisible(_annotated_path_from_value(value))
     # ComfyUI widget serialization can preserve zero-width/BOM characters in
     # an empty hidden field. Remove those before deciding whether this is a
     # real gallery path.
-    path = re.sub(r"[\x00-\x1f\x7f\u200b\ufeff]", "", path).strip()
     if not path or re.fullmatch(r"[+-]?(?:\d+(?:\.\d*)?|\.\d+)", path):
         return ""
     return path
 
 
+def _strip_gallery_invisible(value: str) -> str:
+    """Remove control/format characters from a serialized gallery value."""
+
+    return "".join(
+        character
+        for character in str(value)
+        if unicodedata.category(character) not in {"Cc", "Cf", "Cs"}
+    ).strip()
+
+
 def _load_gallery_image(annotated_path: str) -> torch.Tensor:
-    annotated_path = re.sub(r"[\x00-\x1f\x7f\u200b\ufeff]", "", str(annotated_path)).strip()
+    annotated_path = _strip_gallery_invisible(annotated_path)
     if not annotated_path:
         raise ValueError("gallery image path is empty")
 
@@ -273,9 +283,15 @@ def collect_image_sources(
             continue
 
         gallery_value = gallery_slots.get(gallery_slot_name(slot))
-        if not gallery_value:
+        # gallery_* fields are hidden execution mirrors. The manifest is the
+        # source of truth for whether a gallery slot actually contains a
+        # reference image; this prevents stale serialized widget values from
+        # turning text-to-image runs into empty-path file errors.
+        if not entry:
             continue
         path_value = _gallery_path_candidate(gallery_value)
+        if not path_value:
+            path_value = _gallery_path_candidate(entry.get("path") or entry.get("annotated_path"))
         if not path_value:
             continue
         assets.append(
