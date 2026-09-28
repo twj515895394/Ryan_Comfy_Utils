@@ -28,16 +28,17 @@ test("Qwen gallery supports sorting, deletion, and external input visibility", (
   assert.match(source, /remove\.addEventListener/);
   assert.match(source, /link != null/);
   assert.match(source, /externallyConnected/);
-  assert.match(source, /_ryanQwenAllInputs/);
+  assert.match(source, /ryan_qwen_image_links/);
 });
 
 test("Qwen gallery follows the H3-style in-node image workbench layout", () => {
   assert.match(source, /ryan-qwen-image-grid/);
   assert.match(source, /ryan-qwen-image-slot/);
   assert.match(source, /点击添加图片/);
-  assert.match(source, /input\.hidden = true/);
-  assert.match(source, /getConnectionPosQwen/);
-  assert.match(source, /getSlotInPositionQwen/);
+  assert.match(source, /node\.removeInput/);
+  assert.match(source, /pruneQwenImageInputs/);
+  assert.match(source, /patchQwenGraphToPrompt/);
+  assert.match(source, /installQwenCanvasBridge/);
   assert.match(source, /ryan-qwen-workbench/);
 });
 
