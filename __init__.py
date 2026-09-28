@@ -15,6 +15,7 @@ from .ryan_comfy_utils.nodes.file_nodes import RyanFileExporter
 from .ryan_comfy_utils.nodes.prompt_nodes import RyanPromptTemplate
 from .ryan_comfy_utils.nodes.video_nodes import RyanBatchVideoLoader, RyanVideoFrameSampler, RyanImageBatchSplitter, RyanVideoSceneSplitter
 from .ryan_comfy_utils.nodes.image_generator_node import RyanImageGenerator
+from .ryan_comfy_utils.nodes.qwen_image21_node import RyanQwenImage21
 from .ryan_comfy_utils.nodes.video_generator_node import RyanVideoGenerator
 from .ryan_comfy_utils.nodes.smart_filter_node import (
     RyanSmartImageFilter,
@@ -43,6 +44,7 @@ NODE_CLASS_MAPPINGS = {
     "Ryan Video Scene Splitter": RyanVideoSceneSplitter,
     "Ryan File Exporter": RyanFileExporter,
     "Ryan Image Generator": RyanImageGenerator,
+    "Ryan Qwen Image 2.1": RyanQwenImage21,
     "Ryan Video Generator": RyanVideoGenerator,
     "Ryan Smart Image Filter": RyanSmartImageFilter,
     "Ryan Smart Video Filter": RyanSmartVideoFilter,
@@ -68,6 +70,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "Ryan Video Scene Splitter": "Ryan Video Scene Splitter",
     "Ryan File Exporter": "Ryan File Exporter",
     "Ryan Image Generator": "Ryan Image Generator",
+    "Ryan Qwen Image 2.1": "Ryan Qwen Image 2.1",
     "Ryan Video Generator": "Ryan Video Generator",
     "Ryan Smart Image Filter": "Ryan Smart Image Filter",
     "Ryan Smart Video Filter": "Ryan Smart Video Filter",
