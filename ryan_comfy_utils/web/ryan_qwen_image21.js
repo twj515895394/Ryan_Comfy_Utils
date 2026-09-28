@@ -11,6 +11,7 @@ const QWEN_NUMERIC_DEFAULTS = {
   batch_size: 1,
   resolution: 1024,
 };
+const QWEN_MEGAPIXEL_OPTIONS = [0.5, 0.75, 0.98, 1.0, 1.5, 2.0, 3.0, 4.0];
 const SLOT_PREFIX = "image_";
 const GALLERY_PREFIX = "gallery_";
 const SLOT_REORDER_MIME = "application/x-ryan-qwen-image-reorder";
@@ -63,8 +64,47 @@ function ensureQwenNumericDefaults(node) {
     const widget = findWidget(node, name);
     if (!widget) continue;
     const value = Number(widget.value);
+    if (name === "megapixels" && Number.isFinite(value)) {
+      const option = QWEN_MEGAPIXEL_OPTIONS.find((candidate) => candidate === value);
+      if (option !== undefined) {
+        setWidgetValue(node, name, String(option));
+        continue;
+      }
+    }
     if (!Number.isFinite(value)) setWidgetValue(node, name, fallback);
   }
+}
+
+function ensureQwenPromptInput(node) {
+  if (!node) return null;
+  let input = node.inputs?.find((item) => item?.name === "prompt");
+  if (!input && typeof node.addInput === "function") {
+    // This is the same migration used by the H3 node: append the socket so
+    // old serialized input/link indexes are never shifted.
+    node.addInput("prompt", "STRING", { widget: { name: "prompt" } });
+    input = node.inputs?.find((item) => item?.name === "prompt");
+  }
+  if (input) {
+    input.type = "STRING";
+    input.widget ||= {};
+    input.widget.name = "prompt";
+    input.hidden = false;
+  }
+
+  // Nodes created by the earlier force-input implementation may still carry
+  // a hidden prompt_text widget. Migrate its value into the official prompt
+  // widget, but never expose prompt_text as a second input.
+  const promptWidget = findWidget(node, "prompt");
+  const legacyWidget = findWidget(node, "prompt_text");
+  if (promptWidget && legacyWidget && !String(promptWidget.value || "").trim() && legacyWidget.value) {
+    setWidgetValue(node, "prompt", legacyWidget.value);
+  }
+  if (!promptWidget && legacyWidget) {
+    legacyWidget.name = "prompt";
+    legacyWidget.hidden = false;
+    legacyWidget.computeSize = undefined;
+  }
+  return input;
 }
 
 function ensureQwenNodeSize(node) {
@@ -351,6 +391,38 @@ function gallerySlotHit(node, x, y) {
   return null;
 }
 
+function qwenPromptInputIndex(node) {
+  return node?.inputs?.findIndex?.((input) => input?.name === "prompt") ?? -1;
+}
+
+function qwenPromptElement(node) {
+  return node?.__ryanQwenPromptEditor || node?.__ryanQwenPromptWrap?.querySelector?.(".ryan-qwen-prompt-editor") || null;
+}
+
+function qwenPromptGraphPos(node) {
+  const element = qwenPromptElement(node);
+  const rect = element?.getBoundingClientRect?.();
+  if (!rect || (!rect.width && !rect.height)) return null;
+  // Match the official Qwen widget: the STRING socket sits at the upper-left
+  // edge of the Prompt textarea, rather than in the node's top input list.
+  return clientToGraph(app.canvas, rect.left - 6, rect.top + 8);
+}
+
+function qwenPromptSlotHit(node, x, y) {
+  const element = qwenPromptElement(node);
+  const rect = element?.getBoundingClientRect?.();
+  if (!rect || (!rect.width && !rect.height)) return false;
+  const topLeft = clientToGraph(app.canvas, rect.left - 18, rect.top - 8);
+  const bottomRight = clientToGraph(app.canvas, rect.right, rect.bottom);
+  return Boolean(
+    topLeft && bottomRight
+      && x >= topLeft[0]
+      && x <= bottomRight[0]
+      && y >= topLeft[1]
+      && y <= bottomRight[1],
+  );
+}
+
 function installSlotGeometry(node) {
   if (!node || node.__ryanQwenSlotGeometryInstalled) return;
   node.__ryanQwenSlotGeometryInstalled = true;
@@ -358,6 +430,15 @@ function installSlotGeometry(node) {
   node.getConnectionPos = function getConnectionPosQwen(isInput, slot, out) {
     if (isInput) {
       const input = this.inputs?.[slot];
+      if (input?.name === "prompt") {
+        const graph = qwenPromptGraphPos(this);
+        if (graph) {
+          const point = out || [0, 0];
+          point[0] = graph[0];
+          point[1] = graph[1];
+          return point;
+        }
+      }
       if (isQwenImageInput(input) && input.__ryanQwenSlotVisible) {
         const graph = galleryCellGraphPos(this, Number(input.name.slice(6)));
         if (graph) {
@@ -374,6 +455,10 @@ function installSlotGeometry(node) {
   if (typeof originalGetInputPos === "function") {
     node.getInputPos = function getInputPosQwen(slot) {
       const input = this.inputs?.[slot];
+      if (input?.name === "prompt") {
+        const graph = qwenPromptGraphPos(this);
+        if (graph) return graph;
+      }
       if (isQwenImageInput(input) && input.__ryanQwenSlotVisible) {
         const graph = galleryCellGraphPos(this, Number(input.name.slice(6)));
         if (graph) return graph;
@@ -384,6 +469,16 @@ function installSlotGeometry(node) {
   const originalGetSlotInPosition = node.getSlotInPosition;
   if (typeof originalGetSlotInPosition === "function") {
     node.getSlotInPosition = function getSlotInPositionQwen(x, y) {
+      if (qwenPromptSlotHit(this, x, y)) {
+        const index = qwenPromptInputIndex(this);
+        if (index >= 0) {
+          return {
+            input: true,
+            slot: index,
+            link_pos: qwenPromptGraphPos(this) || [x, y],
+          };
+        }
+      }
       const slot = gallerySlotHit(this, x, y);
       if (slot) {
         const index = this.inputs?.findIndex?.((input) => input.name === qwenImageSlotName(slot)) ?? -1;
@@ -561,16 +656,18 @@ function patchQwenGraphToPrompt() {
         ];
       }
       const promptInput = node.inputs?.find((input) => input.name === "prompt");
-      if (promptInput?.link != null) {
-        // A connected STRING socket is authoritative; the editor value is
-        // retained only as the fallback for the unconnected state.
-        delete promptNode.inputs.prompt_text;
-      } else {
-        delete promptNode.inputs.prompt;
-        promptNode.inputs.prompt_text = findWidget(node, "prompt_text")?.value
-          ?? findWidget(node, "prompt")?.value
-          ?? "";
+      const existingPrompt = promptNode.inputs.prompt;
+      if (promptInput?.link == null) {
+        // Keep the official prompt input name. The custom editor only changes
+        // the value of that widget; it must not introduce prompt_text.
+        promptNode.inputs.prompt = findWidget(node, "prompt")?.value ?? "";
+      } else if (promptInput.link != null && (!Array.isArray(existingPrompt) || existingPrompt.length < 2)) {
+        const native = getNativeGraphLink(node.graph || app.graph, promptInput.link);
+        const originId = native?.origin_id ?? native?.originId;
+        const originSlot = native?.origin_slot ?? native?.originSlot ?? 0;
+        if (originId != null) promptNode.inputs.prompt = [String(originId), Number(originSlot) || 0];
       }
+      delete promptNode.inputs.prompt_text;
       for (let slot = 1; slot <= MAX_SLOTS; slot += 1) {
         const galleryValue = findWidget(node, qwenGallerySlotName(slot))?.value;
         if (galleryValue) promptNode.inputs[qwenGallerySlotName(slot)] = galleryValue;
@@ -842,8 +939,8 @@ function createImageGallery(node) {
 
 function createPromptEditor(node, field, label, minHeight) {
   if (typeof document === "undefined") return null;
-  const storageField = field === "prompt" && findWidget(node, "prompt_text") ? "prompt_text" : field;
-  const widget = findWidget(node, storageField) || findWidget(node, field);
+  const storageField = field;
+  const widget = findWidget(node, storageField);
   if (!widget) return null;
   widget.hidden = true;
   widget.computeSize = () => [0, -4];
@@ -993,7 +1090,7 @@ function createPromptEditor(node, field, label, minHeight) {
 
   const refresh = () => renderValue();
   refresh();
-  return { element: wrapper, refresh };
+  return { field, element: wrapper, editor, refresh };
 }
 
 function installQwenStyles() {
@@ -1059,6 +1156,7 @@ function setupNode(node) {
   installQwenStyles();
   patchQwenGraphToPrompt();
   ensureQwenNumericDefaults(node);
+  ensureQwenPromptInput(node);
   pruneQwenImageInputs(node);
   installSlotGeometry(node);
   installQwenCanvasBridge();
@@ -1080,6 +1178,9 @@ function setupNode(node) {
     createPromptEditor(node, "prompt", "Prompt", 132),
     createPromptEditor(node, "negative_prompt", "Negative Prompt", 76),
   ].filter(Boolean);
+  const positivePromptEditor = promptEditors.find((item) => item.field === "prompt");
+  node.__ryanQwenPromptWrap = positivePromptEditor?.element || null;
+  node.__ryanQwenPromptEditor = positivePromptEditor?.editor || null;
   const promptWorkbench = document.createElement("div");
   promptWorkbench.className = "ryan-qwen-workbench ryan-qwen-prompt-workbench";
   for (const editor of promptEditors) promptWorkbench.append(editor.element);

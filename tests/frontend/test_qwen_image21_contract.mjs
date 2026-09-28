@@ -50,8 +50,12 @@ test("Qwen gallery follows the H3-style in-node image workbench layout", () => {
   assert.match(source, /ryan-qwen-workbench/);
   assert.match(source, /ryan_qwen_image21_gallery/);
   assert.match(source, /ryan_qwen_image21_prompt_workbench/);
-  assert.match(source, /prompt_text/);
-  assert.match(source, /promptInput\?\.link/);
+  assert.match(source, /ensureQwenPromptInput/);
+  assert.match(source, /qwenPromptGraphPos/);
+  assert.match(source, /qwenPromptSlotHit/);
+  assert.match(source, /promptInput\.link/);
+  assert.doesNotMatch(source, /forceInput/);
+  assert.doesNotMatch(source, /promptNode\.inputs\.prompt_text\s*=/);
 });
 
 test("Qwen prompt editors expose image mention completion and persist its manifest", () => {

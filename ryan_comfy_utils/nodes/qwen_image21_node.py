@@ -22,6 +22,9 @@ ASPECT_RATIOS: dict[str, tuple[int, int]] = {
     "21:9 (Ultrawide)": (21, 9),
 }
 
+MEGAPIXEL_OPTIONS = ("0.5", "0.75", "0.98", "1.0", "1.5", "2.0", "3.0", "4.0")
+DEFAULT_MEGAPIXELS = "1.0"
+
 MAX_IMAGE_SLOTS = 16
 MIN_QWEN_SIZE = 16
 MAX_QWEN_SIZE = 4096
@@ -413,10 +416,6 @@ class RyanQwenImage21:
     @classmethod
     def INPUT_TYPES(cls):
         optional: dict[str, tuple] = {
-            # The visible Prompt editor is rendered by the frontend. This
-            # socket lets a STRING node override it when connected.
-            "prompt": ("STRING", {"forceInput": True, "default": ""}),
-            "prompt_text": _empty_hidden_input(),
             "vae": ("VAE",),
         }
         for index in range(1, MAX_IMAGE_SLOTS + 1):
@@ -428,11 +427,22 @@ class RyanQwenImage21:
         return {
             "required": {
                 "clip": ("CLIP",),
-                "negative_prompt": ("STRING", {"default": "", "multiline": True}),
+                # Keep this as a normal ComfyUI multiline widget with a
+                # connectable STRING socket, matching the official Qwen
+                # Image 2.1 node. The frontend places that socket beside
+                # the custom Prompt editor instead of in the top input list.
+                "prompt": (
+                    "STRING",
+                    {"default": "", "multiline": True, "dynamicPrompts": True},
+                ),
+                "negative_prompt": (
+                    "STRING",
+                    {"default": "", "multiline": True, "dynamicPrompts": True},
+                ),
                 "aspect_ratio": (list(ASPECT_RATIOS.keys()), {"default": "1:1 (Square)"}),
                 "megapixels": (
-                    "FLOAT",
-                    {"default": 1.0, "min": 0.1, "max": 16.0, "step": 0.1},
+                    list(MEGAPIXEL_OPTIONS),
+                    {"default": DEFAULT_MEGAPIXELS},
                 ),
                 "batch_size": ("INT", {"default": 1, "min": 1, "max": 64, "step": 1}),
                 "resolution": (
@@ -541,7 +551,9 @@ class RyanQwenImage21:
 
 __all__ = [
     "ASPECT_RATIOS",
+    "DEFAULT_MEGAPIXELS",
     "MAX_IMAGE_SLOTS",
+    "MEGAPIXEL_OPTIONS",
     "RyanQwenImage21",
     "build_qwen_latent",
     "calculate_qwen_resolution",

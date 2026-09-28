@@ -6,6 +6,8 @@ import torch
 
 from ryan_comfy_utils.nodes.qwen_image21_node import (
     ASPECT_RATIOS,
+    DEFAULT_MEGAPIXELS,
+    MEGAPIXEL_OPTIONS,
     RyanQwenImage21,
     build_qwen_latent,
     calculate_qwen_resolution,
@@ -91,12 +93,15 @@ def test_node_input_contract_keeps_simple_qwen_controls_and_sixteen_slots():
     assert "height" not in inputs["required"]
     assert "image_slot_count" not in inputs["required"]
     assert inputs["required"]["aspect_ratio"][1]["default"] == "1:1 (Square)"
-    assert inputs["required"]["megapixels"][1]["default"] == 1.0
+    assert inputs["required"]["megapixels"][0] == list(MEGAPIXEL_OPTIONS)
+    assert inputs["required"]["megapixels"][1]["default"] == DEFAULT_MEGAPIXELS
     assert inputs["required"]["resolution"][1]["default"] == 1024
     assert "reference_resolution" not in inputs["required"]
     assert inputs["required"]["batch_size"][1]["max"] == 64
-    assert inputs["optional"]["prompt"][1]["forceInput"] is True
-    assert inputs["optional"]["prompt_text"][1]["hidden"] is True
+    assert inputs["required"]["prompt"][1]["multiline"] is True
+    assert inputs["required"]["prompt"][1]["dynamicPrompts"] is True
+    assert "prompt" not in inputs["optional"]
+    assert "prompt_text" not in inputs["optional"]
     assert all(f"image_{index:02d}" in inputs["optional"] for index in range(1, 17))
     assert "gallery_manifest" in inputs["optional"]
     assert "prompt_mentions" in inputs["optional"]
