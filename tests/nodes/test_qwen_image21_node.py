@@ -180,13 +180,13 @@ def test_external_image_wins_over_same_slot_gallery_image():
 
 
 def test_numeric_gallery_placeholder_is_ignored_for_text_to_image():
-    assets = collect_image_sources(
-        {"image_01": None},
-        {"gallery_01": "1"},
-        "[]",
-    )
-
-    assert assets == []
+    for placeholder in ("1", "", " ", "\u200b", "\ufeff"):
+        assets = collect_image_sources(
+            {"image_01": None},
+            {"gallery_01": placeholder},
+            "[]",
+        )
+        assert assets == []
 
 
 def test_missing_gallery_image_raises_a_readable_error(monkeypatch):

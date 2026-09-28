@@ -212,13 +212,18 @@ def _gallery_path_candidate(value: Any) -> str:
     generation into a failed reference-image load.
     """
 
-    path = _annotated_path_from_value(value).strip()
+    path = _annotated_path_from_value(value)
+    # ComfyUI widget serialization can preserve zero-width/BOM characters in
+    # an empty hidden field. Remove those before deciding whether this is a
+    # real gallery path.
+    path = re.sub(r"[\x00-\x1f\x7f\u200b\ufeff]", "", path).strip()
     if not path or re.fullmatch(r"[+-]?(?:\d+(?:\.\d*)?|\.\d+)", path):
         return ""
     return path
 
 
 def _load_gallery_image(annotated_path: str) -> torch.Tensor:
+    annotated_path = re.sub(r"[\x00-\x1f\x7f\u200b\ufeff]", "", str(annotated_path)).strip()
     if not annotated_path:
         raise ValueError("gallery image path is empty")
 
