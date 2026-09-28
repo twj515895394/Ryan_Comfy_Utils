@@ -413,6 +413,10 @@ class RyanQwenImage21:
     @classmethod
     def INPUT_TYPES(cls):
         optional: dict[str, tuple] = {
+            # The visible Prompt editor is rendered by the frontend. This
+            # socket lets a STRING node override it when connected.
+            "prompt": ("STRING", {"forceInput": True, "default": ""}),
+            "prompt_text": _empty_hidden_input(),
             "vae": ("VAE",),
         }
         for index in range(1, MAX_IMAGE_SLOTS + 1):
@@ -424,15 +428,14 @@ class RyanQwenImage21:
         return {
             "required": {
                 "clip": ("CLIP",),
-                "prompt": ("STRING", {"default": "", "multiline": True}),
                 "negative_prompt": ("STRING", {"default": "", "multiline": True}),
                 "aspect_ratio": (list(ASPECT_RATIOS.keys()), {"default": "1:1 (Square)"}),
                 "megapixels": (
                     "FLOAT",
-                    {"default": 2.0, "min": 0.1, "max": 16.0, "step": 0.1},
+                    {"default": 1.0, "min": 0.1, "max": 16.0, "step": 0.1},
                 ),
                 "batch_size": ("INT", {"default": 1, "min": 1, "max": 64, "step": 1}),
-                "reference_resolution": (
+                "resolution": (
                     "INT",
                     {"default": 1024, "min": 0, "max": MAX_QWEN_SIZE, "step": 32},
                 ),
@@ -449,21 +452,27 @@ class RyanQwenImage21:
     def encode(
         self,
         clip,
-        prompt: str,
         negative_prompt: str,
         aspect_ratio: str,
         megapixels: float,
         batch_size: int,
-        reference_resolution: int,
+        resolution: int = 1024,
+        prompt: str | None = None,
+        prompt_text: str = "",
         resolution_mode: str = "aspect_ratio_megapixels",
         width: int = 1024,
         height: int = 1024,
         image_slot_count: int = 2,
+        reference_resolution: int | None = None,
         vae=None,
         gallery_manifest: str = "[]",
         prompt_mentions: str = "[]",
         **kwargs,
     ):
+        if reference_resolution is not None:
+            # Compatibility with the previous Ryan node schema.
+            resolution = reference_resolution
+        prompt = str(prompt if prompt is not None else prompt_text or "")
         output_width, output_height = resolve_output_resolution(
             resolution_mode,
             aspect_ratio,
@@ -495,7 +504,7 @@ class RyanQwenImage21:
         )
         images_vl, ref_latents = prepare_qwen_reference_images(
             assets,
-            int(reference_resolution),
+            int(resolution),
             vae=vae,
         )
         keep_vision = len(ref_latents) == 0

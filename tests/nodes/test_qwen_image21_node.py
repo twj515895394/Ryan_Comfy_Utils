@@ -90,7 +90,13 @@ def test_node_input_contract_keeps_simple_qwen_controls_and_sixteen_slots():
     assert "width" not in inputs["required"]
     assert "height" not in inputs["required"]
     assert "image_slot_count" not in inputs["required"]
+    assert inputs["required"]["aspect_ratio"][1]["default"] == "1:1 (Square)"
+    assert inputs["required"]["megapixels"][1]["default"] == 1.0
+    assert inputs["required"]["resolution"][1]["default"] == 1024
+    assert "reference_resolution" not in inputs["required"]
     assert inputs["required"]["batch_size"][1]["max"] == 64
+    assert inputs["optional"]["prompt"][1]["forceInput"] is True
+    assert inputs["optional"]["prompt_text"][1]["hidden"] is True
     assert all(f"image_{index:02d}" in inputs["optional"] for index in range(1, 17))
     assert "gallery_manifest" in inputs["optional"]
     assert "prompt_mentions" in inputs["optional"]
@@ -118,6 +124,22 @@ def test_node_encodes_text_and_returns_qwen_latent_without_images():
     assert [call[0] for call in clip.tokenize_calls] == ["a red fox", "blurry"]
     assert all(call[1]["images"] == [] for call in clip.tokenize_calls)
     assert all(call[1]["keep_vision"] is True for call in clip.tokenize_calls)
+
+
+def test_unconnected_prompt_uses_frontend_prompt_text_fallback():
+    clip = FakeClip()
+    RyanQwenImage21().encode(
+        clip=clip,
+        prompt=None,
+        prompt_text="typed in the node editor",
+        negative_prompt="blurry",
+        aspect_ratio="1:1 (Square)",
+        megapixels=1.0,
+        batch_size=1,
+        resolution=1024,
+    )
+
+    assert clip.tokenize_calls[0][0] == "typed in the node editor"
 
 
 def test_external_images_are_collected_in_slot_order_and_compacted():

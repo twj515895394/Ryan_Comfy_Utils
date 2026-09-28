@@ -5,6 +5,12 @@ const NODE_NAME = "Ryan Qwen Image 2.1";
 const MAX_SLOTS = 16;
 const SLOTS_PER_ROW = 4;
 const DEFAULT_VISIBLE_SLOTS = SLOTS_PER_ROW;
+const QWEN_NODE_MIN_WIDTH = 430;
+const QWEN_NUMERIC_DEFAULTS = {
+  megapixels: 1.0,
+  batch_size: 1,
+  resolution: 1024,
+};
 const SLOT_PREFIX = "image_";
 const GALLERY_PREFIX = "gallery_";
 const SLOT_REORDER_MIME = "application/x-ryan-qwen-image-reorder";
@@ -40,6 +46,32 @@ function setWidgetValue(node, name, value) {
   if (!widget) return;
   widget.value = value;
   if (widget._state) widget._state.value = value;
+}
+
+function ensureQwenNumericDefaults(node) {
+  let resolution = findWidget(node, "resolution");
+  const legacyResolution = findWidget(node, "reference_resolution");
+  if (!resolution && legacyResolution) {
+    legacyResolution.name = "resolution";
+    resolution = legacyResolution;
+    const legacyValue = Number(resolution.value);
+    if (!Number.isFinite(legacyValue) || (legacyValue !== 0 && legacyValue % 32 !== 0)) {
+      setWidgetValue(node, "resolution", QWEN_NUMERIC_DEFAULTS.resolution);
+    }
+  }
+  for (const [name, fallback] of Object.entries(QWEN_NUMERIC_DEFAULTS)) {
+    const widget = findWidget(node, name);
+    if (!widget) continue;
+    const value = Number(widget.value);
+    if (!Number.isFinite(value)) setWidgetValue(node, name, fallback);
+  }
+}
+
+function ensureQwenNodeSize(node) {
+  const measured = node.computeSize?.() || node.size || [QWEN_NODE_MIN_WIDTH, 0];
+  const width = Math.max(QWEN_NODE_MIN_WIDTH, Number(measured[0]) || 0, Number(node.size?.[0]) || 0);
+  const height = Math.max(1, Number(measured[1]) || 0, Number(node.size?.[1]) || 0);
+  node.setSize?.([width, height]);
 }
 
 function getManifest(node) {
@@ -223,7 +255,7 @@ function updateGalleryVisibility(node) {
   node.__ryanQwenVisibleSlotCount = visibleCount;
   node.__ryanQwenRenderGallery?.();
   node._widgetSlotsDirty = true;
-  node.setSize?.(node.computeSize?.());
+  ensureQwenNodeSize(node);
   app.graph?.setDirtyCanvas?.(true, true);
 }
 
@@ -528,6 +560,17 @@ function patchQwenGraphToPrompt() {
           Number(link.source_slot) || 0,
         ];
       }
+      const promptInput = node.inputs?.find((input) => input.name === "prompt");
+      if (promptInput?.link != null) {
+        // A connected STRING socket is authoritative; the editor value is
+        // retained only as the fallback for the unconnected state.
+        delete promptNode.inputs.prompt_text;
+      } else {
+        delete promptNode.inputs.prompt;
+        promptNode.inputs.prompt_text = findWidget(node, "prompt_text")?.value
+          ?? findWidget(node, "prompt")?.value
+          ?? "";
+      }
       for (let slot = 1; slot <= MAX_SLOTS; slot += 1) {
         const galleryValue = findWidget(node, qwenGallerySlotName(slot))?.value;
         if (galleryValue) promptNode.inputs[qwenGallerySlotName(slot)] = galleryValue;
@@ -799,7 +842,8 @@ function createImageGallery(node) {
 
 function createPromptEditor(node, field, label, minHeight) {
   if (typeof document === "undefined") return null;
-  const widget = findWidget(node, field);
+  const storageField = field === "prompt" && findWidget(node, "prompt_text") ? "prompt_text" : field;
+  const widget = findWidget(node, storageField) || findWidget(node, field);
   if (!widget) return null;
   widget.hidden = true;
   widget.computeSize = () => [0, -4];
@@ -842,7 +886,7 @@ function createPromptEditor(node, field, label, minHeight) {
       asset_id: chip.dataset.assetId || "",
       fallback_ordinal: Number(chip.dataset.ordinal || 0),
     }));
-    setWidgetValue(node, field, serializeEditor());
+    setWidgetValue(node, storageField, serializeEditor());
     setWidgetValue(node, "prompt_mentions", JSON.stringify([...existing, ...mentions]));
   }
 
@@ -964,7 +1008,7 @@ function installQwenStyles() {
     .ryan-qwen-image-toggle { appearance:none; padding:0 4px; border:0; border-radius:3px; background:transparent; color:rgba(255,255,255,.55); cursor:pointer; font:600 10px/16px system-ui,sans-serif; }
     .ryan-qwen-image-toggle:hover,.ryan-qwen-image-toggle:focus-visible { background:rgba(0,226,187,.12); color:rgba(255,255,255,.9); outline:none; }
     .ryan-qwen-prompt-heading { color:rgba(255,255,255,.56); font-size:10px; font-weight:650; line-height:16px; letter-spacing:.035em; }
-    .ryan-qwen-image-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:4px; min-width:0; }
+    .ryan-qwen-image-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:4px; width:100%; min-width:0; box-sizing:border-box; }
     .ryan-qwen-image-slot { appearance:none; position:relative; display:flex; align-items:center; justify-content:center; min-width:0; height:72px; overflow:hidden; box-sizing:border-box; padding:0; border:1px dashed rgba(255,255,255,.18); border-radius:7px; background:rgba(255,255,255,.035); color:rgba(255,255,255,.48); cursor:pointer; transition:border-color .12s ease,background-color .12s ease,opacity .12s ease,transform .12s ease; }
     .ryan-qwen-image-slot:hover,.ryan-qwen-image-slot:focus-visible,.ryan-qwen-image-slot.is-dragover { border-color:rgba(0,226,187,.64); background:rgba(0,226,187,.075); outline:none; }
     .ryan-qwen-image-slot.has-image[draggable="true"] { cursor:grab; }
@@ -1002,7 +1046,9 @@ function moveWidgetsBeforeResolution(node, widgets) {
   if (!anchor || !Array.isArray(node.widgets)) return;
   const moving = widgets.filter((widget) => widget && node.widgets.includes(widget));
   if (!moving.length) return;
-  node.widgets = node.widgets.filter((widget) => !moving.includes(widget));
+  for (let index = node.widgets.length - 1; index >= 0; index -= 1) {
+    if (moving.includes(node.widgets[index])) node.widgets.splice(index, 1);
+  }
   const target = node.widgets.indexOf(anchor);
   node.widgets.splice(target >= 0 ? target : node.widgets.length, 0, ...moving);
 }
@@ -1012,10 +1058,22 @@ function setupNode(node) {
   node.__ryanQwenImage21Installed = true;
   installQwenStyles();
   patchQwenGraphToPrompt();
+  ensureQwenNumericDefaults(node);
   pruneQwenImageInputs(node);
   installSlotGeometry(node);
   installQwenCanvasBridge();
   setTimeout(() => installQwenCanvasBridge(), 0);
+  if (!node.__ryanQwenResizePatched) {
+    node.__ryanQwenResizePatched = true;
+    const originalResize = node.onResize;
+    node.onResize = function onResizeQwenImage21() {
+      const result = originalResize?.apply(this, arguments);
+      if (Array.isArray(this.size) && this.size[0] < QWEN_NODE_MIN_WIDTH) {
+        this.size[0] = QWEN_NODE_MIN_WIDTH;
+      }
+      return result;
+    };
+  }
 
   const gallery = createImageGallery(node);
   const promptEditors = [
@@ -1059,6 +1117,7 @@ function setupNode(node) {
     node.__ryanQwenGalleryWidget = galleryWidget;
     node.__ryanQwenPromptWidget = promptWidget;
   }
+  ensureQwenNodeSize(node);
 
   node.__ryanQwenRefreshMentions = () => promptEditors.forEach((editor) => editor.refresh());
   const originalConnectionsChange = node.onConnectionsChange;
@@ -1085,9 +1144,10 @@ app.registerExtension({
 
     const originalConfigure = nodeType.prototype.configure;
     nodeType.prototype.configure = function configureQwenImage21(info) {
-    const result = originalConfigure?.apply(this, arguments);
+      const result = originalConfigure?.apply(this, arguments);
       pruneQwenImageInputs(this);
       if (!this.__ryanQwenImage21Installed) setupNode(this);
+      ensureQwenNumericDefaults(this);
       this.__ryanQwenRefreshMentions?.();
       updateGalleryVisibility(this);
       return result;

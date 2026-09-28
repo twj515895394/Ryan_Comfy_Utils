@@ -12,6 +12,9 @@ test("Qwen Image 2.1 frontend owns a sixteen-slot node extension", () => {
   assert.match(source, /const MAX_SLOTS = 16/);
   assert.match(source, /const SLOTS_PER_ROW = 4/);
   assert.match(source, /const DEFAULT_VISIBLE_SLOTS = SLOTS_PER_ROW/);
+  assert.match(source, /QWEN_NUMERIC_DEFAULTS/);
+  assert.match(source, /megapixels: 1\.0/);
+  assert.match(source, /resolution: 1024/);
   assert.match(source, /beforeRegisterNodeDef/);
   assert.doesNotMatch(source, /COUNT_WIDGET|image_slot_count/);
 });
@@ -47,6 +50,8 @@ test("Qwen gallery follows the H3-style in-node image workbench layout", () => {
   assert.match(source, /ryan-qwen-workbench/);
   assert.match(source, /ryan_qwen_image21_gallery/);
   assert.match(source, /ryan_qwen_image21_prompt_workbench/);
+  assert.match(source, /prompt_text/);
+  assert.match(source, /promptInput\?\.link/);
 });
 
 test("Qwen prompt editors expose image mention completion and persist its manifest", () => {
