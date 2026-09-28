@@ -30,3 +30,11 @@ test("Qwen gallery supports sorting, deletion, and external input visibility", (
   assert.match(source, /externallyConnected/);
   assert.match(source, /_ryanQwenAllInputs/);
 });
+
+test("Qwen prompt editors expose image mention completion and persist its manifest", () => {
+  assert.match(source, /createPromptEditor/);
+  assert.match(source, /activeMentionOptions/);
+  assert.match(source, /@\(\?:图片\|image\)/);
+  assert.match(source, /prompt_mentions/);
+  assert.match(source, /assetId/);
+});

@@ -128,23 +128,23 @@ rtk git commit -m "feat: add Qwen reference image gallery"
 - Modify: `tests/nodes/test_qwen_image21_node.py`
 - Modify: `tests/frontend/test_qwen_image21_contract.mjs`
 
-- [ ] **Step 1: 写 mention 解析失败测试**
+- [x] **Step 1: 写 mention 解析失败测试**
 
 测试 `@图片1`、`@image1`、stable `asset_id`、画廊排序、外部槽位、失效资源、越界序号、Prompt/Negative Prompt 独立解析和无图引用错误。
 
-- [ ] **Step 2: 实现后端 mention 解析**
+- [x] **Step 2: 实现后端 mention 解析**
 
 定义 `resolve_image_mentions(prompt, active_assets, manifest)` 和 `replace_prompt_mentions(prompt, resolved_assets)`。优先按稳定 `asset_id` 解析，旧工作流或手写文本按当前紧凑序号 fallback；解析结果替换为 `Picture N`，未知引用抛出包含原始引用和修复建议的 `ValueError`。
 
-- [ ] **Step 3: 接入两个 Qwen Prompt**
+- [x] **Step 3: 接入两个 Qwen Prompt**
 
 执行前分别解析 Prompt 和 Negative Prompt，再将替换后的文本传给官方 tokenizer。图片列表保持原有效图片顺序，不因为 mention 数量变化而删图。
 
-- [ ] **Step 4: 实现前端 `@` 菜单和 chip 序列化**
+- [x] **Step 4: 实现前端 `@` 菜单和 chip 序列化**
 
 Prompt 和 Negative Prompt 各自监听 `@` 输入，显示当前有效图片菜单；选择后插入 `@图片N` chip，并同步普通字符串和 `prompt_mentions` manifest。复制、删除、重新排序和工作流加载必须保留或正确移除稳定 `asset_id`。
 
-- [ ] **Step 5: 运行 mention 测试**
+- [x] **Step 5: 运行 mention 测试**
 
 运行：
 
@@ -155,7 +155,7 @@ node --test tests/frontend/test_qwen_image21_contract.mjs
 
 预期：mention 的稳定绑定、fallback、错误和前端序列化全部通过。
 
-- [ ] **Step 6: 提交第 03 票**
+- [x] **Step 6: 提交第 03 票**
 
 ```powershell
 rtk git add ryan_comfy_utils/nodes/qwen_image21_node.py ryan_comfy_utils/web/ryan_qwen_image21.js tests/nodes/test_qwen_image21_node.py tests/frontend/test_qwen_image21_contract.mjs

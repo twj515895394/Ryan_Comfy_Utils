@@ -12,6 +12,8 @@ from ryan_comfy_utils.nodes.qwen_image21_node import (
     collect_image_sources,
     normalize_custom_resolution,
     prepare_qwen_reference_images,
+    replace_prompt_mentions,
+    resolve_image_mentions,
     resolve_output_resolution,
 )
 
@@ -187,3 +189,79 @@ def test_node_passes_all_external_images_to_qwen_without_vae():
     assert len(clip.tokenize_calls) == 2
     assert all(len(call[1]["images"]) == 2 for call in clip.tokenize_calls)
     assert all(call[1]["keep_vision"] is True for call in clip.tokenize_calls)
+
+
+def test_mentions_resolve_by_stable_asset_id_after_reordering():
+    original_assets = [
+        {"asset_id": "character", "filename": "character.png"},
+        {"asset_id": "clothing", "filename": "clothing.png"},
+    ]
+    reordered_assets = [original_assets[1], original_assets[0]]
+    manifest = [{"field": "positive", "display": "@图片1", "asset_id": "character"}]
+
+    resolved = resolve_image_mentions("@图片1 是身份参考", reordered_assets, manifest)
+    assert resolved[0]["asset_id"] == "character"
+    assert resolved[0]["ordinal"] == 2
+    assert replace_prompt_mentions("@图片1 是身份参考", reordered_assets, manifest) == "Picture 2 是身份参考"
+
+
+def test_manual_mentions_use_current_compact_ordinal():
+    assets = [
+        {"asset_id": "a"},
+        {"asset_id": "b"},
+    ]
+    assert replace_prompt_mentions("@image2 is clothing", assets) == "Picture 2 is clothing"
+
+
+def test_invalid_and_missing_mentions_raise_readable_errors():
+    assets = [{"asset_id": "a"}]
+    try:
+        resolve_image_mentions("@图片2", assets)
+    except ValueError as exc:
+        assert "超出当前有效参考图范围" in str(exc)
+    else:
+        raise AssertionError("an out-of-range mention should fail")
+
+    try:
+        resolve_image_mentions(
+            "@图片1",
+            assets,
+            [{"field": "positive", "display": "@图片1", "asset_id": "deleted"}],
+        )
+    except ValueError as exc:
+        assert "参考图已不存在" in str(exc)
+    else:
+        raise AssertionError("a deleted mentioned asset should fail")
+
+
+def test_positive_and_negative_mentions_use_separate_manifest_fields():
+    assets = [{"asset_id": "character"}, {"asset_id": "clothing"}]
+    manifest = [
+        {"field": "positive", "display": "@图片1", "asset_id": "character"},
+        {"field": "negative", "display": "@图片1", "asset_id": "clothing"},
+    ]
+    assert replace_prompt_mentions("@图片1", assets, manifest, field="positive") == "Picture 1"
+    assert replace_prompt_mentions("@图片1", assets, manifest, field="negative") == "Picture 2"
+
+
+def test_node_replaces_mentions_before_qwen_tokenization():
+    clip = FakeClip()
+    image = torch.zeros((1, 32, 32, 3), dtype=torch.float32)
+    RyanQwenImage21().encode(
+        clip=clip,
+        prompt="@图片1 is the identity",
+        negative_prompt="not @image1",
+        resolution_mode="custom",
+        aspect_ratio="1:1 (Square)",
+        megapixels=2.0,
+        width=1024,
+        height=1024,
+        batch_size=1,
+        reference_resolution=0,
+        image_slot_count=1,
+        prompt_mentions="[]",
+        image_01=image,
+    )
+
+    assert clip.tokenize_calls[0][0] == "Picture 1 is the identity"
+    assert clip.tokenize_calls[1][0] == "not Picture 1"

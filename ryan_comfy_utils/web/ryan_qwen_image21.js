@@ -54,6 +54,16 @@ function getManifest(node) {
   }
 }
 
+function getMentionManifest(node) {
+  const value = findWidget(node, "prompt_mentions")?.value || "[]";
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed.filter((item) => item && typeof item === "object") : [];
+  } catch (_error) {
+    return [];
+  }
+}
+
 function viewUrl(path) {
   if (!path?.name) return "";
   const query = new URLSearchParams({
@@ -69,6 +79,38 @@ function isExternalSlotConnected(node, slot) {
     (candidate) => candidate.name === qwenImageSlotName(slot),
   );
   return input?.link != null;
+}
+
+function activeMentionOptions(node) {
+  const gallery = getManifest(node);
+  const options = [];
+  for (let slot = 1; slot <= MAX_SLOTS; slot += 1) {
+    if (isExternalSlotConnected(node, slot)) {
+      options.push({
+        asset_id: `external-slot-${String(slot).padStart(2, "0")}`,
+        slot,
+        ordinal: options.length + 1,
+        filename: `外部输入 ${qwenImageSlotName(slot)}`,
+        source: "external",
+      });
+      continue;
+    }
+    const item = gallery[slot - 1];
+    if (item) {
+      options.push({
+        asset_id: item.asset_id,
+        slot,
+        ordinal: options.length + 1,
+        filename: item.filename || `图片${options.length + 1}`,
+        path: item.path,
+        source: "gallery",
+      });
+    }
+  }
+  return options.map((option) => ({
+    ...option,
+    display: `@图片${option.ordinal}`,
+  }));
 }
 
 function updateGalleryHiddenWidgets(node, gallery) {
@@ -157,6 +199,7 @@ function createGalleryElement(node) {
   const sync = () => {
     updateGalleryHiddenWidgets(node, state.gallery);
     render();
+    node.__ryanQwenRefreshMentions?.();
     node.setDirtyCanvas?.(true, true);
   };
 
@@ -244,6 +287,163 @@ function createGalleryElement(node) {
   return root;
 }
 
+function createPromptEditor(node, field) {
+  if (typeof document === "undefined") return null;
+  const widget = findWidget(node, field);
+  if (!widget) return null;
+  widget.hidden = true;
+  widget.computeSize = () => [0, -4];
+
+  const wrapper = document.createElement("div");
+  wrapper.className = `ryan-qwen-${field}-editor`;
+  wrapper.style.cssText = "position:relative;display:flex;flex-direction:column;gap:4px;padding:4px 0;";
+  const editor = document.createElement("div");
+  editor.contentEditable = "true";
+  editor.spellcheck = true;
+  editor.style.cssText = "min-height:56px;max-height:150px;overflow:auto;padding:6px;border:1px solid var(--border-color);border-radius:4px;background:var(--comfy-input-bg);white-space:pre-wrap;line-height:1.35;";
+  const menu = document.createElement("div");
+  menu.hidden = true;
+  menu.style.cssText = "position:absolute;left:4px;right:4px;top:100%;z-index:30;display:flex;flex-direction:column;gap:2px;padding:4px;background:var(--comfy-menu-bg,#222);border:1px solid var(--border-color);border-radius:4px;max-height:180px;overflow:auto;";
+  wrapper.append(editor, menu);
+
+  const state = { triggerRange: null, usedManifest: new Set() };
+
+  function serializeEditor() {
+    return [...editor.childNodes].map((child) => {
+      if (child.nodeType === Node.ELEMENT_NODE && child.classList.contains("ryan-qwen-mention")) {
+        return child.dataset.display || child.textContent || "";
+      }
+      return child.textContent || "";
+    }).join("");
+  }
+
+  function updateMentionManifest() {
+    const existing = getMentionManifest(node).filter(
+      (item) => (item.field || item.prompt || "positive") !== field,
+    );
+    const mentions = [...editor.querySelectorAll(".ryan-qwen-mention")].map((chip) => ({
+      field,
+      display: chip.dataset.display || chip.textContent || "",
+      asset_id: chip.dataset.assetId || "",
+      fallback_ordinal: Number(chip.dataset.ordinal || 0),
+    }));
+    setWidgetValue(node, field, serializeEditor());
+    setWidgetValue(node, "prompt_mentions", JSON.stringify([...existing, ...mentions]));
+  }
+
+  function makeChip(display, option, assetId = "") {
+    const chip = document.createElement("span");
+    chip.className = "ryan-qwen-mention";
+    chip.contentEditable = "false";
+    chip.dataset.display = display;
+    chip.dataset.assetId = assetId || option?.asset_id || "";
+    chip.dataset.ordinal = String(option?.ordinal || 0);
+    chip.textContent = display;
+    chip.style.cssText = "display:inline-block;margin:0 2px;padding:1px 5px;border-radius:10px;background:#405b75;color:#fff;font-size:.9em;user-select:all;";
+    return chip;
+  }
+
+  function renderValue() {
+    const value = String(widget.value || "");
+    const mentionManifest = getMentionManifest(node).filter(
+      (item) => (item.field || item.prompt || "positive") === field,
+    );
+    const options = activeMentionOptions(node);
+    const byAsset = new Map(options.map((option) => [option.asset_id, option]));
+    const used = new Set();
+    editor.replaceChildren();
+    let cursor = 0;
+    for (const match of value.matchAll(/@(?:图片|image)(\d+)/g)) {
+      const start = match.index ?? 0;
+      if (start > cursor) editor.append(document.createTextNode(value.slice(cursor, start)));
+      const token = match[0];
+      const saved = mentionManifest.find((item, index) => (
+        !used.has(index) && (item.display || token) === token
+      ));
+      if (saved) used.add(mentionManifest.indexOf(saved));
+      const option = saved?.asset_id ? byAsset.get(saved.asset_id) : options[Number(match[1]) - 1];
+      const display = option?.display || token;
+      editor.append(makeChip(display, option, saved?.asset_id || option?.asset_id || ""));
+      cursor = start + token.length;
+    }
+    if (cursor < value.length) editor.append(document.createTextNode(value.slice(cursor)));
+    widget.value = serializeEditor();
+  }
+
+  function closeMenu() {
+    menu.hidden = true;
+    state.triggerRange = null;
+  }
+
+  function openMenu() {
+    const options = activeMentionOptions(node);
+    menu.replaceChildren();
+    if (!options.length) {
+      const empty = document.createElement("span");
+      empty.textContent = "当前没有可引用的图片";
+      empty.style.opacity = "0.7";
+      menu.append(empty);
+    }
+    for (const option of options) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.textContent = `${option.display}  ${option.filename}`;
+      button.style.cssText = "text-align:left;padding:4px 6px;background:transparent;color:inherit;border:0;cursor:pointer;";
+      button.addEventListener("mousedown", (event) => event.preventDefault());
+      button.addEventListener("click", () => insertMention(option));
+      menu.append(button);
+    }
+    menu.hidden = false;
+    const selection = window.getSelection();
+    state.triggerRange = selection?.rangeCount ? selection.getRangeAt(0).cloneRange() : null;
+  }
+
+  function insertMention(option) {
+    editor.focus();
+    const selection = window.getSelection();
+    const range = state.triggerRange || (selection?.rangeCount ? selection.getRangeAt(0) : null);
+    if (!range) return closeMenu();
+    const insertion = range.cloneRange();
+    const container = insertion.startContainer;
+    const offset = insertion.startOffset;
+    if (container.nodeType === Node.TEXT_NODE && offset > 0 && container.textContent[offset - 1] === "@") {
+      insertion.setStart(container, offset - 1);
+      insertion.deleteContents();
+    }
+    insertion.collapse(true);
+    const chip = makeChip(option.display, option);
+    insertion.insertNode(chip);
+    const spacer = document.createTextNode(" ");
+    chip.after(spacer);
+    const caret = document.createRange();
+    caret.setStart(spacer, 1);
+    caret.collapse(true);
+    selection.removeAllRanges();
+    selection.addRange(caret);
+    updateMentionManifest();
+    closeMenu();
+  }
+
+  editor.addEventListener("input", () => {
+    updateMentionManifest();
+    const selection = window.getSelection();
+    const container = selection?.rangeCount ? selection.getRangeAt(0).startContainer : null;
+    if (container?.nodeType === Node.TEXT_NODE && container.textContent.slice(0, selection.getRangeAt(0).startOffset).endsWith("@")) {
+      openMenu();
+    }
+  });
+  editor.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") closeMenu();
+  });
+  editor.addEventListener("blur", () => {
+    window.setTimeout(closeMenu, 100);
+  });
+
+  const refresh = () => renderValue();
+  refresh();
+  return { element: wrapper, refresh };
+}
+
 function setupNode(node) {
   if (node.__ryanQwenImage21Installed) return;
   node.__ryanQwenImage21Installed = true;
@@ -271,6 +471,16 @@ function setupNode(node) {
         hideOnZoom: false,
       });
     }
+    const promptEditors = ["prompt", "negative_prompt"]
+      .map((field) => createPromptEditor(node, field))
+      .filter(Boolean);
+    for (const editor of promptEditors) {
+      node.addDOMWidget(`ryan_qwen_${editor.element.className}`, "prompt", editor.element, {
+        serialize: false,
+        hideOnZoom: false,
+      });
+    }
+    node.__ryanQwenRefreshMentions = () => promptEditors.forEach((editor) => editor.refresh());
   }
 }
 
@@ -296,6 +506,7 @@ app.registerExtension({
         }
       }
       if (!this.__ryanQwenImage21Installed) setupNode(this);
+      this.__ryanQwenRefreshMentions?.();
       updateSlotVisibility(this, findWidget(this, COUNT_WIDGET)?.value ?? DEFAULT_SLOT_COUNT);
       return result;
     };

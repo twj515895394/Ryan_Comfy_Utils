@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import math
 import json
+import re
 from pathlib import Path
 from typing import Any
 
@@ -26,6 +27,7 @@ MIN_QWEN_SIZE = 16
 MAX_QWEN_SIZE = 4096
 QWEN_LATENT_MULTIPLE = 16
 QWEN_REFERENCE_MULTIPLE = 32
+IMAGE_MENTION_PATTERN = re.compile(r"@(?:图片|image)(\d+)")
 
 
 def _round_to_multiple(value: float, multiple: int) -> int:
@@ -301,6 +303,106 @@ def prepare_qwen_reference_images(
     return images_vl, ref_latents
 
 
+def _parse_prompt_mentions(value: str | list[dict[str, Any]] | None) -> list[dict[str, Any]]:
+    if not value:
+        return []
+    if isinstance(value, list):
+        data = value
+    else:
+        try:
+            data = json.loads(value)
+        except (TypeError, json.JSONDecodeError) as exc:
+            raise ValueError("prompt_mentions must be valid JSON") from exc
+    if not isinstance(data, list):
+        raise ValueError("prompt_mentions must be a JSON list")
+    return [item for item in data if isinstance(item, dict)]
+
+
+def resolve_image_mentions(
+    prompt: str,
+    active_assets: list[dict[str, Any]],
+    manifest: str | list[dict[str, Any]] | None = None,
+    *,
+    field: str = "positive",
+) -> list[dict[str, Any]]:
+    """Resolve image mentions to the current compact image ordinal.
+
+    A saved manifest binds a mention to an asset id. Hand-written text without
+    a manifest falls back to the current compact ordinal for compatibility.
+    """
+
+    prompt_text = str(prompt or "")
+    mention_manifest = _parse_prompt_mentions(manifest)
+    matching_manifest = [
+        item for item in mention_manifest if item.get("field", item.get("prompt", "positive")) == field
+    ]
+    used_manifest_indexes: set[int] = set()
+    assets_by_id = {
+        str(asset.get("asset_id")): (index + 1, asset)
+        for index, asset in enumerate(active_assets)
+        if asset.get("asset_id")
+    }
+    resolved: list[dict[str, Any]] = []
+    for match in IMAGE_MENTION_PATTERN.finditer(prompt_text):
+        token = match.group(0)
+        ordinal_from_text = int(match.group(1))
+        manifest_entry = None
+        manifest_index = None
+        for index, item in enumerate(matching_manifest):
+            if index in used_manifest_indexes:
+                continue
+            if str(item.get("display") or token) == token:
+                manifest_entry = item
+                manifest_index = index
+                break
+
+        asset = None
+        ordinal = None
+        if manifest_entry is not None and manifest_entry.get("asset_id"):
+            asset_result = assets_by_id.get(str(manifest_entry["asset_id"]))
+            if asset_result is None:
+                raise ValueError(
+                    f"Ryan Qwen Image 2.1: {token} 指向的参考图已不存在，请重新上传图片或删除该引用。"
+                )
+            ordinal, asset = asset_result
+            used_manifest_indexes.add(manifest_index)
+        else:
+            if ordinal_from_text < 1 or ordinal_from_text > len(active_assets):
+                raise ValueError(
+                    f"Ryan Qwen Image 2.1: {token} 超出当前有效参考图范围（共 {len(active_assets)} 张）。"
+                )
+            ordinal = ordinal_from_text
+            asset = active_assets[ordinal - 1]
+
+        resolved.append(
+            {
+                "token": token,
+                "start": match.start(),
+                "end": match.end(),
+                "ordinal": ordinal,
+                "asset_id": asset.get("asset_id"),
+                "asset": asset,
+            }
+        )
+    return resolved
+
+
+def replace_prompt_mentions(
+    prompt: str,
+    active_assets: list[dict[str, Any]],
+    manifest: str | list[dict[str, Any]] | None = None,
+    *,
+    field: str = "positive",
+) -> str:
+    resolved = resolve_image_mentions(prompt, active_assets, manifest, field=field)
+    if not resolved:
+        return str(prompt or "")
+    output = str(prompt or "")
+    for mention in reversed(resolved):
+        output = output[: mention["start"]] + f"Picture {mention['ordinal']}" + output[mention["end"] :]
+    return output
+
+
 def _empty_hidden_input(default: str = "") -> tuple[str, dict[str, Any]]:
     return ("STRING", {"default": default, "multiline": True, "hidden": True})
 
@@ -386,7 +488,7 @@ class RyanQwenImage21:
             height,
         )
 
-        del image_slot_count, prompt_mentions
+        del image_slot_count
         image_slots = {
             image_slot_name(index): kwargs.get(image_slot_name(index))
             for index in range(1, MAX_IMAGE_SLOTS + 1)
@@ -396,6 +498,13 @@ class RyanQwenImage21:
             for index in range(1, MAX_IMAGE_SLOTS + 1)
         }
         assets = collect_image_sources(image_slots, gallery_slots, gallery_manifest)
+        prompt = replace_prompt_mentions(prompt, assets, prompt_mentions, field="positive")
+        negative_prompt = replace_prompt_mentions(
+            negative_prompt,
+            assets,
+            prompt_mentions,
+            field="negative",
+        )
         images_vl, ref_latents = prepare_qwen_reference_images(
             assets,
             int(reference_resolution),
@@ -442,5 +551,7 @@ __all__ = [
     "collect_image_sources",
     "normalize_custom_resolution",
     "prepare_qwen_reference_images",
+    "replace_prompt_mentions",
+    "resolve_image_mentions",
     "resolve_output_resolution",
 ]
