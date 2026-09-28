@@ -203,6 +203,21 @@ def _annotated_path_from_value(value: Any) -> str:
     return raw
 
 
+def _gallery_path_candidate(value: Any) -> str:
+    """Return a gallery path, ignoring stale numeric widget placeholders.
+
+    Gallery slots are hidden STRING widgets. Older serialized nodes can leave
+    a control value such as ``"1"`` in one of those widgets after the visible
+    widget order changes. It is not a file path and must not turn a text-only
+    generation into a failed reference-image load.
+    """
+
+    path = _annotated_path_from_value(value).strip()
+    if not path or re.fullmatch(r"[+-]?(?:\d+(?:\.\d*)?|\.\d+)", path):
+        return ""
+    return path
+
+
 def _load_gallery_image(annotated_path: str) -> torch.Tensor:
     if not annotated_path:
         raise ValueError("gallery image path is empty")
@@ -255,7 +270,9 @@ def collect_image_sources(
         gallery_value = gallery_slots.get(gallery_slot_name(slot))
         if not gallery_value:
             continue
-        path_value = _annotated_path_from_value(gallery_value)
+        path_value = _gallery_path_candidate(gallery_value)
+        if not path_value:
+            continue
         assets.append(
             {
                 "asset_id": entry.get("asset_id") or f"gallery-slot-{slot:02d}",
