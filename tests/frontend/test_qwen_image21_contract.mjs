@@ -10,8 +10,10 @@ const source = await readFile(
 test("Qwen Image 2.1 frontend owns a sixteen-slot node extension", () => {
   assert.match(source, /const NODE_NAME = "Ryan Qwen Image 2\.1"/);
   assert.match(source, /const MAX_SLOTS = 16/);
+  assert.match(source, /const SLOTS_PER_ROW = 4/);
+  assert.match(source, /const DEFAULT_VISIBLE_SLOTS = SLOTS_PER_ROW/);
   assert.match(source, /beforeRegisterNodeDef/);
-  assert.match(source, /image_slot_count/);
+  assert.doesNotMatch(source, /COUNT_WIDGET|image_slot_count/);
 });
 
 test("Qwen gallery uses ComfyUI upload metadata and persists stable assets", () => {
@@ -33,13 +35,18 @@ test("Qwen gallery supports sorting, deletion, and external input visibility", (
 
 test("Qwen gallery follows the H3-style in-node image workbench layout", () => {
   assert.match(source, /ryan-qwen-image-grid/);
+  assert.match(source, /grid-template-columns:repeat\(4/);
   assert.match(source, /ryan-qwen-image-slot/);
+  assert.match(source, /ryan-qwen-image-toggle/);
+  assert.match(source, /展开其余/);
   assert.match(source, /点击添加图片/);
   assert.match(source, /node\.removeInput/);
   assert.match(source, /pruneQwenImageInputs/);
   assert.match(source, /patchQwenGraphToPrompt/);
   assert.match(source, /installQwenCanvasBridge/);
   assert.match(source, /ryan-qwen-workbench/);
+  assert.match(source, /ryan_qwen_image21_gallery/);
+  assert.match(source, /ryan_qwen_image21_prompt_workbench/);
 });
 
 test("Qwen prompt editors expose image mention completion and persist its manifest", () => {

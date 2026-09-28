@@ -426,29 +426,16 @@ class RyanQwenImage21:
                 "clip": ("CLIP",),
                 "prompt": ("STRING", {"default": "", "multiline": True}),
                 "negative_prompt": ("STRING", {"default": "", "multiline": True}),
-                "resolution_mode": (
-                    ["aspect_ratio_megapixels", "custom"],
-                    {"default": "aspect_ratio_megapixels"},
-                ),
                 "aspect_ratio": (list(ASPECT_RATIOS.keys()), {"default": "1:1 (Square)"}),
                 "megapixels": (
                     "FLOAT",
                     {"default": 2.0, "min": 0.1, "max": 16.0, "step": 0.1},
-                ),
-                "width": (
-                    "INT",
-                    {"default": 1024, "min": MIN_QWEN_SIZE, "max": MAX_QWEN_SIZE, "step": 16},
-                ),
-                "height": (
-                    "INT",
-                    {"default": 1024, "min": MIN_QWEN_SIZE, "max": MAX_QWEN_SIZE, "step": 16},
                 ),
                 "batch_size": ("INT", {"default": 1, "min": 1, "max": 64, "step": 1}),
                 "reference_resolution": (
                     "INT",
                     {"default": 1024, "min": 0, "max": MAX_QWEN_SIZE, "step": 32},
                 ),
-                "image_slot_count": ("INT", {"default": 2, "min": 0, "max": MAX_IMAGE_SLOTS, "step": 1}),
             },
             "optional": optional,
         }
@@ -464,13 +451,13 @@ class RyanQwenImage21:
         clip,
         prompt: str,
         negative_prompt: str,
-        resolution_mode: str,
         aspect_ratio: str,
         megapixels: float,
-        width: int,
-        height: int,
         batch_size: int,
         reference_resolution: int,
+        resolution_mode: str = "aspect_ratio_megapixels",
+        width: int = 1024,
+        height: int = 1024,
         image_slot_count: int = 2,
         vae=None,
         gallery_manifest: str = "[]",
@@ -485,6 +472,10 @@ class RyanQwenImage21:
             height,
         )
 
+        # These compatibility parameters are intentionally not exposed by
+        # INPUT_TYPES anymore. They allow older serialized workflows to keep
+        # executing while the node UI stays focused on Qwen's recommended
+        # aspect-ratio/megapixel sizing and image gallery.
         del image_slot_count
         image_slots = {
             image_slot_name(index): kwargs.get(image_slot_name(index))

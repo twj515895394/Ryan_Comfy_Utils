@@ -84,14 +84,13 @@ def test_qwen_latent_shape_and_channel_count():
     assert latent["samples"].dtype == torch.float32
 
 
-def test_node_input_contract_contains_qwen_controls_and_sixteen_slots():
+def test_node_input_contract_keeps_simple_qwen_controls_and_sixteen_slots():
     inputs = RyanQwenImage21.INPUT_TYPES()
-    assert inputs["required"]["image_slot_count"][1]["max"] == 16
+    assert "resolution_mode" not in inputs["required"]
+    assert "width" not in inputs["required"]
+    assert "height" not in inputs["required"]
+    assert "image_slot_count" not in inputs["required"]
     assert inputs["required"]["batch_size"][1]["max"] == 64
-    assert inputs["required"]["resolution_mode"][0] == [
-        "aspect_ratio_megapixels",
-        "custom",
-    ]
     assert all(f"image_{index:02d}" in inputs["optional"] for index in range(1, 17))
     assert "gallery_manifest" in inputs["optional"]
     assert "prompt_mentions" in inputs["optional"]
