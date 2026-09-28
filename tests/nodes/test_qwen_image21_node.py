@@ -95,6 +95,8 @@ def test_node_input_contract_keeps_simple_qwen_controls_and_sixteen_slots():
     assert inputs["required"]["aspect_ratio"][1]["default"] == "1:1 (Square)"
     assert inputs["required"]["megapixels"][0] == list(MEGAPIXEL_OPTIONS)
     assert inputs["required"]["megapixels"][1]["default"] == DEFAULT_MEGAPIXELS
+    assert all(isinstance(value, float) for value in inputs["required"]["megapixels"][0])
+    assert isinstance(inputs["required"]["megapixels"][1]["default"], float)
     assert inputs["required"]["resolution"][1]["default"] == 1024
     assert "reference_resolution" not in inputs["required"]
     assert inputs["required"]["batch_size"][1]["default"] == 1

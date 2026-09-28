@@ -22,8 +22,8 @@ ASPECT_RATIOS: dict[str, tuple[int, int]] = {
     "21:9 (Ultrawide)": (21, 9),
 }
 
-MEGAPIXEL_OPTIONS = ("0.5", "0.75", "0.98", "1.0", "1.5", "2.0", "3.0", "4.0")
-DEFAULT_MEGAPIXELS = "1.0"
+MEGAPIXEL_OPTIONS = (0.5, 0.75, 0.98, 1.0, 1.5, 2.0, 3.0, 4.0)
+DEFAULT_MEGAPIXELS = 1.0
 
 MAX_IMAGE_SLOTS = 16
 MIN_QWEN_SIZE = 16

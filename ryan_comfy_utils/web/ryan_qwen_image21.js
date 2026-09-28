@@ -64,7 +64,7 @@ function ensureQwenNumericDefaults(node) {
     if (name === "megapixels") {
       const option = QWEN_MEGAPIXEL_OPTIONS.find((candidate) => candidate === value);
       valid = option !== undefined;
-      if (valid) setWidgetValue(node, name, String(option));
+      if (valid) setWidgetValue(node, name, option);
     } else if (name === "batch_size") {
       valid = Number.isInteger(value) && value >= 1 && value <= 64;
     } else if (name === "resolution") {
@@ -75,7 +75,7 @@ function ensureQwenNumericDefaults(node) {
         && value <= 4096
         && (value === 0 || value % 32 === 0);
     }
-    if (!valid) setWidgetValue(node, name, name === "megapixels" ? String(fallback) : fallback);
+    if (!valid) setWidgetValue(node, name, fallback);
   }
 }
 
@@ -425,6 +425,20 @@ function qwenPromptSlotHit(node, x, y) {
       && y >= topLeft[1]
       && y <= bottomRight[1],
   );
+}
+
+function updateQwenPromptConnectionState(node) {
+  const promptInput = node?.inputs?.find((input) => input?.name === "prompt");
+  const connected = promptInput?.link != null;
+  const editor = qwenPromptElement(node);
+  if (editor) {
+    editor.contentEditable = connected ? "false" : "true";
+    editor.tabIndex = connected ? -1 : 0;
+    editor.setAttribute("aria-readonly", connected ? "true" : "false");
+    editor.classList.toggle("is-connected", connected);
+    if (connected && document.activeElement === editor) editor.blur();
+  }
+  node?.__ryanQwenPromptWrap?.classList?.toggle("is-connected", connected);
 }
 
 function installSlotGeometry(node) {
@@ -1131,6 +1145,7 @@ function installQwenStyles() {
     .ryan-qwen-image-slot-clear:disabled { opacity:.4; cursor:not-allowed; }
     .ryan-qwen-prompt-wrap { position:relative; display:grid; grid-template-rows:max-content minmax(0,1fr); height:var(--ryan-qwen-prompt-height); flex:0 0 var(--ryan-qwen-prompt-height); gap:3px; min-width:0; min-height:calc(var(--ryan-qwen-prompt-min-height) + 19px); }
     .ryan-qwen-prompt-editor { display:block; width:100%; height:100%; min-width:0; min-height:0; max-height:none; box-sizing:border-box; padding:6px; overflow-y:auto; overflow-x:hidden; white-space:pre-wrap; overflow-wrap:anywhere; border:1px solid rgba(255,255,255,.14); border-radius:5px; outline:none; background:rgba(0,0,0,.28); color:var(--input-text,#ddd); caret-color:var(--input-text,#ddd); font-family:Consolas,"Courier New",monospace; font-size:12px; line-height:1.35; }
+    .ryan-qwen-prompt-editor.is-connected { opacity:.58; cursor:not-allowed; background:rgba(255,255,255,.055); }
     .ryan-qwen-prompt-editor:focus { border-color:rgba(0,226,187,.7); }
     .ryan-qwen-prompt-editor:empty::before { content:attr(data-placeholder); color:rgba(255,255,255,.38); pointer-events:none; }
     .ryan-qwen-mention { display:inline-block; margin:0 2px; padding:1px 5px; border-radius:10px; background:#405b75; color:#fff; font-size:.9em; user-select:all; }
@@ -1185,6 +1200,7 @@ function setupNode(node) {
   const positivePromptEditor = promptEditors.find((item) => item.field === "prompt");
   node.__ryanQwenPromptWrap = positivePromptEditor?.element || null;
   node.__ryanQwenPromptEditor = positivePromptEditor?.editor || null;
+  updateQwenPromptConnectionState(node);
   const promptWorkbench = document.createElement("div");
   promptWorkbench.className = "ryan-qwen-workbench ryan-qwen-prompt-workbench";
   for (const editor of promptEditors) promptWorkbench.append(editor.element);
@@ -1228,6 +1244,7 @@ function setupNode(node) {
   const originalConnectionsChange = node.onConnectionsChange;
   node.onConnectionsChange = function onConnectionsChangeQwen() {
     const result = originalConnectionsChange?.apply(this, arguments);
+    updateQwenPromptConnectionState(this);
     updateGalleryVisibility(this);
     this.__ryanQwenRefreshMentions?.();
     this.setDirtyCanvas?.(true, true);
@@ -1253,6 +1270,8 @@ app.registerExtension({
       pruneQwenImageInputs(this);
       if (!this.__ryanQwenImage21Installed) setupNode(this);
       ensureQwenNumericDefaults(this);
+      ensureQwenPromptInput(this);
+      updateQwenPromptConnectionState(this);
       this.__ryanQwenRefreshMentions?.();
       updateGalleryVisibility(this);
       return result;

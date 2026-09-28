@@ -56,6 +56,8 @@ test("Qwen gallery follows the H3-style in-node image workbench layout", () => {
   assert.match(source, /ensureQwenPromptInput/);
   assert.match(source, /qwenPromptGraphPos/);
   assert.match(source, /qwenPromptSlotHit/);
+  assert.match(source, /updateQwenPromptConnectionState/);
+  assert.match(source, /contentEditable = connected \? "false" : "true"/);
   assert.match(source, /promptInput\.link/);
   assert.doesNotMatch(source, /forceInput/);
   assert.doesNotMatch(source, /promptNode\.inputs\.prompt_text\s*=/);
