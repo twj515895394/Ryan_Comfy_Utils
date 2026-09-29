@@ -590,6 +590,45 @@ function qwenConnectingOutput(canvas) {
   };
 }
 
+function qwenSlotIndex(slots, rawSlot) {
+  if (typeof rawSlot === "number" && slots?.[rawSlot]) return rawSlot;
+  if (typeof rawSlot === "string" && /^\d+$/.test(rawSlot) && slots?.[Number(rawSlot)]) return Number(rawSlot);
+  for (const key of ["slot_index", "slot", "index"]) {
+    const value = rawSlot?.[key];
+    if (typeof value === "number" && slots?.[value]) return value;
+    if (typeof value === "string" && /^\d+$/.test(value) && slots?.[Number(value)]) return Number(value);
+  }
+  if (Array.isArray(slots) && rawSlot) {
+    const direct = slots.indexOf(rawSlot);
+    if (direct >= 0) return direct;
+    const name = typeof rawSlot === "string" ? rawSlot : rawSlot?.name;
+    if (name) return slots.findIndex((slot) => slot?.name === name);
+  }
+  return -1;
+}
+
+function qwenPendingConnectorOutput(canvas) {
+  const link = canvas?.linkConnector?.renderLinks?.at?.(0);
+  if (link) {
+    const sourceNode = link.node || link.fromNode || link.originNode || link.sourceNode
+      || link.outputNode || link.toNode || link.targetNode;
+    const endpointSlot = link.fromSlot ?? link.slot ?? link.output ?? link.input ?? link.toSlot ?? {};
+    const inputIndex = qwenSlotIndex(sourceNode?.inputs, endpointSlot);
+    const outputIndex = qwenSlotIndex(sourceNode?.outputs, endpointSlot);
+    const toType = String(link.toType || link.targetType || link.targetSlotType || "").toLowerCase();
+    const fromInput = toType.includes("output") || (inputIndex >= 0 && outputIndex < 0);
+    if (!fromInput && sourceNode && outputIndex >= 0) {
+      const output = sourceNode.outputs?.[outputIndex] || endpointSlot || {};
+      return {
+        sourceNode,
+        sourceSlot: outputIndex,
+        sourceType: output.type || output.datatype || output.label || "IMAGE",
+      };
+    }
+  }
+  return qwenConnectingOutput(canvas);
+}
+
 function qwenGalleryCellFromEvent(event) {
   const element = document.elementFromPoint(Number(event?.clientX), Number(event?.clientY));
   const cell = element?.closest?.(".ryan-qwen-image-slot");
@@ -641,11 +680,11 @@ function installQwenCanvasBridge() {
   canvas.__ryanQwenCanvasBridgeInstalled = true;
   let pendingOutput = null;
   const rememberOutput = () => {
-    const current = qwenConnectingOutput(canvas);
+    const current = qwenPendingConnectorOutput(canvas);
     if (current) pendingOutput = current;
   };
   const handleDrop = (event) => {
-    const current = qwenConnectingOutput(canvas) || pendingOutput;
+    const current = qwenPendingConnectorOutput(canvas) || pendingOutput;
     const hit = qwenGalleryCellFromEvent(event);
     if (!current || !hit || Number(current.sourceNode?.id) === Number(hit.node.id)) return;
     if (!addQwenVirtualLink(hit.node, current.sourceNode, current.sourceSlot, current.sourceType, hit.slot)) return;
@@ -655,6 +694,8 @@ function installQwenCanvasBridge() {
     canvas.linkConnector?.reset?.();
     canvas.connecting_node = null;
     canvas.connecting_output = null;
+    canvas.connecting_slot = null;
+    canvas.connecting_input = null;
     pendingOutput = null;
   };
   canvas.canvas.addEventListener("pointerdown", rememberOutput, true);

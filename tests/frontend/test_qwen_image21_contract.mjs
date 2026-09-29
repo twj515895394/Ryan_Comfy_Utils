@@ -25,6 +25,14 @@ test("Qwen Image 2.1 frontend owns a sixteen-slot node extension", () => {
   assert.doesNotMatch(source, /COUNT_WIDGET|image_slot_count/);
 });
 
+test("Qwen gallery captures modern LiteGraph connector drops", () => {
+  assert.match(source, /function qwenSlotIndex/);
+  assert.match(source, /function qwenPendingConnectorOutput/);
+  assert.match(source, /linkConnector\?\.renderLinks/);
+  assert.match(source, /window\.addEventListener\("pointerup", handleDrop, true\)/);
+  assert.match(source, /elementFromPoint/);
+});
+
 test("Qwen gallery uses ComfyUI upload metadata and persists stable assets", () => {
   assert.match(source, /fetchApi\("\/upload\/image"/);
   assert.match(source, /form\.append\("image"/);
