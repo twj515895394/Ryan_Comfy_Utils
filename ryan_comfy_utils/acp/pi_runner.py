@@ -10,7 +10,7 @@ DISCUSS 模式用于讨论和形成 Draft；COMMIT 模式才允许输出可供�
 不要自行触发 ComfyUI Queue，不要访问其他 Workflow 或 Agent Session，也不要读取 AGENTS.md、CLAUDE.md 等隐式项目规则。
 """
 
-_PI_REQUIRED_HELP_FLAGS = ("--mode", "--no-context-files", "--skill")
+_PI_REQUIRED_HELP_FLAGS = ("--mode", "--no-context-files", "--skill", "--no-session")
 _PI_FULL_TOOLS = "read,bash,edit,write"
 
 
@@ -54,6 +54,12 @@ def build_pi_command(
     if runner_profile.get("use_skill_flag", True):
         if "--skill" not in command:
             command.extend(("--skill", "{skill_directory}"))
+
+    # ACP nodes are one-shot requests. Never let Pi persist or resume a
+    # conversation between ComfyUI executions.
+    if "--no-session" not in command:
+        command.append("--no-session")
+
     configured_prompt = runner_profile.get("system_prompt") or system_prompt
     if configured_prompt == "{ryan_system_prompt}":
         configured_prompt = system_prompt

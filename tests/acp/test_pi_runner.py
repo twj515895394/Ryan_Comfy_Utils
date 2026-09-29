@@ -30,6 +30,7 @@ class TestPiRunner(unittest.TestCase):
         self.assertIn("--no-context-files", command)
         self.assertIn("--skill", command)
         self.assertIn("{skill_directory}", command)
+        self.assertEqual(command.count("--no-session"), 1)
         self.assertIn("--system-prompt", command)
         self.assertIn(RYAN_SYSTEM_PROMPT, command)
         self.assertIn("--tools", command)
@@ -48,7 +49,7 @@ class TestPiRunner(unittest.TestCase):
         run.return_value = subprocess.CompletedProcess(
             ["pi", "--help"],
             0,
-            stdout="--mode --no-context-files --skill",
+            stdout="--mode --no-context-files --skill --no-session",
             stderr="",
         )
 
