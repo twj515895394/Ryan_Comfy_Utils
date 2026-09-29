@@ -27,9 +27,13 @@ test("Qwen Image 2.1 frontend owns a sixteen-slot node extension", () => {
 
 test("Qwen gallery captures modern LiteGraph connector drops", () => {
   assert.match(source, /function qwenSlotIndex/);
+  assert.match(source, /function qwenPendingConnectorLink/);
   assert.match(source, /function qwenPendingConnectorOutput/);
   assert.match(source, /linkConnector\?\.renderLinks/);
-  assert.match(source, /window\.addEventListener\("pointerup", handleDrop, true\)/);
+  assert.match(source, /linkConnector\?\.events/);
+  assert.match(source, /before-drop-links/);
+  assert.match(source, /dropped-on-canvas/);
+  assert.match(source, /target\.addEventListener\("pointerup", handleDrop, true\)/);
   assert.match(source, /elementFromPoint/);
 });
 
@@ -98,4 +102,17 @@ test("Qwen workbench persists and restores DOM-owned state across workflow reloa
   assert.match(source, /const restored = restoreQwenState\(this\)/);
   assert.match(source, /refreshQwenGalleryState\(this\)/);
   assert.match(source, /gallery_expanded/);
+  assert.match(source, /node\.serialize/);
+  const configure = source.slice(source.indexOf("nodeType.prototype.configure"));
+  assert.ok(
+    configure.indexOf("ensureQwenNumericDefaults(this)") < configure.lastIndexOf("restoreQwenState(this)"),
+    "saved Qwen state must be restored after defaults are applied",
+  );
+});
+
+test("Qwen collapsed workbench recomputes height instead of preserving expanded height", () => {
+  assert.doesNotMatch(
+    source,
+    /Math\.max\(1, Number\(measured\[1\]\) \|\| 0, Number\(node\.size\?\.\[1\]\) \|\| 0\)/,
+  );
 });

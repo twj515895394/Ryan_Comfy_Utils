@@ -150,6 +150,29 @@ function installQwenPersistenceHooks(node) {
       return result;
     };
   }
+  if (!node.__ryanQwenSerializePatched) {
+    node.__ryanQwenSerializePatched = true;
+    const originalSerialize = node.serialize;
+    if (typeof originalSerialize === "function") {
+      node.serialize = function serializeQwenImage21() {
+        persistQwenState(this);
+        const serialized = originalSerialize.apply(this, arguments);
+        serialized.properties ||= {};
+        serialized.properties[QWEN_STATE_PROP] = this.properties?.[QWEN_STATE_PROP];
+        return serialized;
+      };
+    }
+    const originalOnSerialize = node.onSerialize;
+    node.onSerialize = function onSerializeQwenImage21(info) {
+      const result = originalOnSerialize?.apply(this, arguments);
+      persistQwenState(this);
+      if (info && typeof info === "object") {
+        info.properties ||= {};
+        info.properties[QWEN_STATE_PROP] = this.properties?.[QWEN_STATE_PROP];
+      }
+      return result;
+    };
+  }
 }
 
 function formatQwenMegapixelOption(value) {
@@ -237,7 +260,7 @@ function ensureQwenPromptInput(node) {
 function ensureQwenNodeSize(node) {
   const measured = node.computeSize?.() || node.size || [QWEN_NODE_MIN_WIDTH, 0];
   const width = Math.max(QWEN_NODE_MIN_WIDTH, Number(measured[0]) || 0, Number(node.size?.[0]) || 0);
-  const height = Math.max(1, Number(measured[1]) || 0, Number(node.size?.[1]) || 0);
+  const height = Math.max(1, Number(measured[1]) || 0);
   node.setSize?.([width, height]);
 }
 
@@ -760,29 +783,50 @@ function qwenSlotIndex(slots, rawSlot) {
 }
 
 function qwenPendingConnectorOutput(canvas) {
+  const pending = qwenPendingConnectorLink(canvas);
+  return pending?.direction === "from_output"
+    ? {
+      sourceNode: pending.sourceNode,
+      sourceSlot: pending.sourceSlot,
+      sourceType: pending.sourceType,
+    }
+    : null;
+}
+
+function qwenPendingConnectorLink(canvas) {
   const link = canvas?.linkConnector?.renderLinks?.at?.(0);
   if (link) {
-    const sourceNode = link.node || link.fromNode || link.originNode || link.sourceNode
-      || link.outputNode || link.toNode || link.targetNode;
+    const endpointNode = link.node || link.fromNode || link.originNode || link.sourceNode
+      || link.outputNode || link.toNode || link.targetNode || link.inputNode;
     const endpointSlot = link.fromSlot ?? link.slot ?? link.output ?? link.input ?? link.toSlot ?? {};
-    const inputIndex = qwenSlotIndex(sourceNode?.inputs, endpointSlot);
-    const outputIndex = qwenSlotIndex(sourceNode?.outputs, endpointSlot);
+    const inputIndex = qwenSlotIndex(endpointNode?.inputs, endpointSlot);
+    const outputIndex = qwenSlotIndex(endpointNode?.outputs, endpointSlot);
     const toType = String(link.toType || link.targetType || link.targetSlotType || "").toLowerCase();
-    const fromInput = toType.includes("output") || (inputIndex >= 0 && outputIndex < 0);
-    if (!fromInput && sourceNode && outputIndex >= 0) {
-      const output = sourceNode.outputs?.[outputIndex] || endpointSlot || {};
+    let direction = toType.includes("output") ? "from_input" : "from_output";
+    if (inputIndex >= 0 && outputIndex < 0) direction = "from_input";
+    if (outputIndex >= 0 && inputIndex < 0) direction = "from_output";
+    if (direction === "from_input") return null;
+    if (endpointNode && outputIndex >= 0) {
+      const output = endpointNode.outputs?.[outputIndex] || endpointSlot || {};
       return {
-        sourceNode,
+        direction,
+        sourceNode: endpointNode,
         sourceSlot: outputIndex,
         sourceType: output.type || output.datatype || output.label || "IMAGE",
       };
     }
   }
-  return qwenConnectingOutput(canvas);
+  const connecting = qwenConnectingOutput(canvas);
+  return connecting
+    ? { direction: "from_output", ...connecting }
+    : null;
 }
 
 function qwenGalleryCellFromEvent(event) {
-  const element = document.elementFromPoint(Number(event?.clientX), Number(event?.clientY));
+  const clientX = Number(event?.clientX);
+  const clientY = Number(event?.clientY);
+  if (!Number.isFinite(clientX) || !Number.isFinite(clientY)) return null;
+  const element = document.elementFromPoint(clientX, clientY);
   const cell = element?.closest?.(".ryan-qwen-image-slot");
   if (!cell || cell.classList.contains("is-disabled")) return null;
   const gallery = cell.closest(".ryan-qwen-image-gallery");
@@ -830,16 +874,33 @@ function installQwenCanvasBridge() {
   const canvas = app.canvas;
   if (!canvas?.canvas || canvas.__ryanQwenCanvasBridgeInstalled) return;
   canvas.__ryanQwenCanvasBridgeInstalled = true;
-  let pendingOutput = null;
+  let lastDraggedOutput = null;
+  let lastCapturedDropAt = 0;
   const rememberOutput = () => {
-    const current = qwenPendingConnectorOutput(canvas);
-    if (current) pendingOutput = current;
+    const current = qwenPendingConnectorLink(canvas);
+    if (current?.direction === "from_output") {
+      lastDraggedOutput = {
+        sourceNode: current.sourceNode,
+        sourceSlot: current.sourceSlot,
+        sourceType: current.sourceType,
+      };
+    }
   };
   const handleDrop = (event) => {
-    const current = qwenPendingConnectorOutput(canvas) || pendingOutput;
+    if (event?.button > 0 || performance.now() - lastCapturedDropAt < 80) return;
+    const live = qwenPendingConnectorLink(canvas);
+    if (live?.direction === "from_output") {
+      lastDraggedOutput = {
+        sourceNode: live.sourceNode,
+        sourceSlot: live.sourceSlot,
+        sourceType: live.sourceType,
+      };
+    }
+    const current = live?.direction === "from_output" ? live : lastDraggedOutput;
     const hit = qwenGalleryCellFromEvent(event);
     if (!current || !hit || Number(current.sourceNode?.id) === Number(hit.node.id)) return;
     if (!connectQwenImageInput(hit.node, current.sourceNode, current.sourceSlot, hit.slot)) return;
+    lastCapturedDropAt = performance.now();
     event.preventDefault?.();
     event.stopPropagation?.();
     event.stopImmediatePropagation?.();
@@ -848,14 +909,20 @@ function installQwenCanvasBridge() {
     canvas.connecting_output = null;
     canvas.connecting_slot = null;
     canvas.connecting_input = null;
-    pendingOutput = null;
+    lastDraggedOutput = null;
   };
-  canvas.canvas.addEventListener("pointerdown", rememberOutput, true);
-  canvas.canvas.addEventListener("pointermove", rememberOutput, true);
-  window.addEventListener("pointerdown", rememberOutput, true);
-  window.addEventListener("pointermove", rememberOutput, true);
-  window.addEventListener("pointerup", handleDrop, true);
-  window.addEventListener("mouseup", handleDrop, true);
+  const pointerTargets = [window, document, canvas.canvas];
+  for (const target of pointerTargets) {
+    target.addEventListener("pointerdown", rememberOutput, true);
+    target.addEventListener("pointermove", rememberOutput, true);
+    target.addEventListener("pointerup", handleDrop, true);
+    target.addEventListener("mouseup", handleDrop, true);
+  }
+  const events = canvas.linkConnector?.events;
+  const beforeDropLinksHandler = () => rememberOutput();
+  const droppedOnCanvasHandler = () => rememberOutput();
+  events?.addEventListener?.("before-drop-links", beforeDropLinksHandler, { capture: true });
+  events?.addEventListener?.("dropped-on-canvas", droppedOnCanvasHandler, { capture: true });
   if (typeof canvas.drawConnections === "function") {
     const originalDraw = canvas.drawConnections;
     canvas.drawConnections = function drawConnectionsWithQwenLinks(context) {
@@ -1502,10 +1569,13 @@ app.registerExtension({
       this._ryanQwenAllInputs ||= [...(this.inputs || [])];
       if (!this.__ryanQwenImage21Installed) setupNode(this);
       virtualizeQwenImageInputs(this);
-      if (!restored) refreshQwenGalleryState(this);
       ensureQwenNumericDefaults(this);
       ensureQwenPromptInput(this);
       installQwenPersistenceHooks(this);
+      // Restore after setup/default normalization as DOM widgets and combo
+      // widgets can be inserted/reordered while configure is running.
+      if (restored) restoreQwenState(this);
+      else refreshQwenGalleryState(this);
       updateQwenPromptConnectionState(this);
       this.__ryanQwenRefreshMentions?.();
       persistQwenState(this);
