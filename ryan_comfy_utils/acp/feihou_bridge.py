@@ -17,6 +17,7 @@ from typing import Any
 from .contracts import load_manifest
 from .runtime import execute_text_session, map_result_fields
 from .skill_loader import resolve_skill_directory, resolve_skill_root
+from .workspace import create_run_session_id
 
 _PACKAGE_ROOT = Path(__file__).resolve().parent
 _DEFAULT_MANIFEST_PATH = _PACKAGE_ROOT / "fixtures" / "manifests" / "feihou_h3_agent.json"
@@ -286,11 +287,12 @@ def run_h3_agent(
 
     # 6. 准备 workspace
     ws_root = Path(workspace_root) if workspace_root.strip() else Path(profile["workspace_root"])
+    run_session_id = create_run_session_id(session_id)
 
     # 7. 执行 ACP session（渲染前由 execute_text_session 注入 adapter 目录）
     result = execute_text_session(
         workspace_root=ws_root,
-        session_id=session_id,
+        session_id=run_session_id,
         skill_root=s_root,
         skill_id=primary_skill_id,
         context_template=manifest["context_template"],

@@ -4,7 +4,7 @@ import unittest
 from pathlib import Path
 
 from ryan_comfy_utils.acp.session import create_session_record
-from ryan_comfy_utils.acp.workspace import prepare_workspace
+from ryan_comfy_utils.acp.workspace import create_run_session_id, prepare_workspace
 
 
 class TestSessionWorkspace(unittest.TestCase):
@@ -31,7 +31,14 @@ class TestSessionWorkspace(unittest.TestCase):
 
 
     def test_prepare_workspace_rejects_bad_session_id(self):
-        from ryan_comfy_utils.acp.workspace import prepare_workspace
         with tempfile.TemporaryDirectory() as tmp:
             with self.assertRaises(ValueError):
                 prepare_workspace(Path(tmp), "../escape")
+
+    def test_create_run_session_id_is_unique_for_repeated_node_runs(self):
+        first = create_run_session_id("session_image_prompt")
+        second = create_run_session_id("session_image_prompt")
+
+        self.assertNotEqual(first, second)
+        self.assertTrue(first.startswith("session_image_prompt__run_"))
+        self.assertTrue(second.startswith("session_image_prompt__run_"))
