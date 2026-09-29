@@ -327,42 +327,86 @@ function qwenNativeImageInput(node, slot) {
     || null;
 }
 
-function connectQwenImageInput(node, sourceNode, sourceSlot, slot) {
+function writeQwenVirtualLink(node, targetSlot, sourceId, sourceSlot, sourceType = "IMAGE") {
+  const slot = Number(targetSlot);
+  if (!node || !Number.isInteger(slot) || slot < 1 || slot > MAX_SLOTS || sourceId == null) return false;
+  const next = qwenLinks(node).filter((link) => Number(link.slot) !== slot);
+  next.push({
+    source_id: String(sourceId),
+    source_slot: Number(sourceSlot) || 0,
+    source_type: sourceType || "IMAGE",
+    slot,
+    order: slot,
+  });
+  node.properties[QWEN_LINKS_PROP] = next;
+  return true;
+}
+
+function addQwenVirtualLink(node, sourceNode, sourceSlot, targetSlot) {
   if (!node || !sourceNode || Number(node.id) === Number(sourceNode.id)) return false;
-  const targetSlot = Number(slot);
-  if (!Number.isInteger(targetSlot) || targetSlot < 1 || targetSlot > MAX_SLOTS) return false;
-  const input = qwenNativeImageInput(node, targetSlot);
-  const inputIndex = input ? node.inputs?.indexOf(input) : -1;
-  if (!input || inputIndex == null || inputIndex < 0) return false;
-
-  // The gallery port is only a relocated native LiteGraph socket. Keep the
-  // actual graph link so ComfyUI serializes and executes it normally.
-  try {
-    sourceNode.connect?.(Number(sourceSlot) || 0, node, inputIndex);
-  } catch (_error) { /* Try the graph-level API below. */ }
-  if (input.link == null) {
-    try {
-      app.graph?.connect?.(
-        Number(sourceNode.id),
-        Number(sourceSlot) || 0,
-        Number(node.id),
-        inputIndex,
-      );
-    } catch (_error) { /* The native socket will report failure if unsupported. */ }
-  }
-  if (input.link == null) return false;
-
-  // Discard a legacy virtual record for this slot after the native link is
-  // established, so old and new serialization paths do not duplicate it.
-  node.properties[QWEN_LINKS_PROP] = qwenLinks(node).filter(
-    (link) => Number(link.slot) !== targetSlot,
+  const output = sourceNode.outputs?.[Number(sourceSlot)] || {};
+  const written = writeQwenVirtualLink(
+    node,
+    targetSlot,
+    sourceNode.id,
+    sourceSlot,
+    output.type || output.datatype || output.label || "IMAGE",
   );
+  if (!written) return false;
   node.setDirtyCanvas?.(true, true);
   app.graph?.setDirtyCanvas?.(true, true);
   app.graph?.change?.();
   updateGalleryVisibility(node);
   node.__ryanQwenRefreshMentions?.();
   return true;
+}
+
+function migrateQwenNativeImageLinks(node) {
+  const graph = node?.graph || app.graph;
+  for (const input of node?.inputs || []) {
+    if (!isQwenImageInput(input) || input.link == null) continue;
+    const targetSlot = Number(String(input.name).slice(6));
+    const native = getNativeGraphLink(graph, input.link);
+    const originId = native?.origin_id ?? native?.originId;
+    if (originId == null) continue;
+    const originSlot = native?.origin_slot ?? native?.originSlot ?? 0;
+    const sourceNode = graph?.getNodeById?.(Number(originId));
+    const output = sourceNode?.outputs?.[Number(originSlot)] || {};
+    writeQwenVirtualLink(
+      node,
+      targetSlot,
+      originId,
+      originSlot,
+      native?.type || output.type || output.datatype || output.label || "IMAGE",
+    );
+  }
+}
+
+function disconnectQwenNativeInput(node, inputIndex) {
+  const input = node?.inputs?.[inputIndex];
+  if (!input || input.link == null) return;
+  try {
+    node.disconnectInput?.(inputIndex);
+  } catch (_error) { /* The link is removed from the node below if needed. */ }
+  input.link = null;
+}
+
+function virtualizeQwenImageInputs(node) {
+  if (!node || !Array.isArray(node.inputs)) return;
+  migrateQwenNativeImageLinks(node);
+  for (let index = node.inputs.length - 1; index >= 0; index -= 1) {
+    if (!isQwenImageInput(node.inputs[index])) continue;
+    disconnectQwenNativeInput(node, index);
+    // H3 does not keep one hidden native socket per gallery cell. The gallery
+    // cells are the actual input surface and graphToPrompt serializes these
+    // virtual links back to the backend's image_01...image_16 fields.
+    node.inputs.splice(index, 1);
+  }
+  node._ryanQwenImageInputsVirtualized = true;
+}
+
+function connectQwenImageInput(node, sourceNode, sourceSlot, slot) {
+  return addQwenVirtualLink(node, sourceNode, sourceSlot, slot);
 }
 
 function removeQwenVirtualLink(node, slot) {
@@ -445,10 +489,10 @@ function visibleGallerySlotCount(node) {
 function updateGalleryVisibility(node) {
   const visibleCount = visibleGallerySlotCount(node);
   if (!node._ryanQwenAllInputs) node._ryanQwenAllInputs = [...(node.inputs || [])];
-  for (const input of node._ryanQwenAllInputs) {
+  for (const input of node.inputs || []) {
     if (!isQwenImageInput(input)) continue;
-    // Keep the real input in node.inputs for native graph links, but hide its
-    // default canvas label/socket because the DOM gallery owns the placement.
+    // Native image sockets only exist briefly while a saved workflow is being
+    // restored. They are never part of the visible node after virtualization.
     input.hidden = true;
     input.__ryanQwenSlotVisible = Number(input.name.slice(6)) <= visibleCount;
   }
@@ -836,23 +880,11 @@ function patchQwenGraphToPrompt() {
       for (let slot = 1; slot <= MAX_SLOTS; slot += 1) {
         const inputName = qwenImageSlotName(slot);
         delete promptNode.inputs[inputName];
-        const input = qwenNativeImageInput(node, slot);
-        if (input?.link != null) {
-          const native = getNativeGraphLink(node.graph || app.graph, input.link);
-          const originId = native?.origin_id ?? native?.originId;
-          const originSlot = native?.origin_slot ?? native?.originSlot ?? 0;
-          if (originId != null) {
-            promptNode.inputs[inputName] = [String(originId), Number(originSlot) || 0];
-          }
-          continue;
-        }
-        // Keep compatibility with workflows saved by the old virtual-port
-        // implementation. New connections never use this fallback.
-        const legacy = qwenLinks(node).find((link) => Number(link.slot) === slot);
-        if (legacy) {
+        const link = qwenLinks(node).find((item) => Number(item.slot) === slot);
+        if (link?.source_id != null) {
           promptNode.inputs[inputName] = [
-            String(legacy.source_id),
-            Number(legacy.source_slot) || 0,
+            String(link.source_id),
+            Number(link.source_slot) || 0,
           ];
         }
       }
@@ -1442,6 +1474,8 @@ function setupNode(node) {
   };
   persistQwenState(node);
   updateGalleryVisibility(node);
+  virtualizeQwenImageInputs(node);
+  updateGalleryVisibility(node);
 }
 
 app.registerExtension({
@@ -1457,10 +1491,17 @@ app.registerExtension({
 
     const originalConfigure = nodeType.prototype.configure;
     nodeType.prototype.configure = function configureQwenImage21(info) {
+      // Keep a private copy only long enough for LiteGraph's normal workflow
+      // loader to restore legacy image_N links. They are migrated immediately
+      // into the H3-style virtual gallery links after configure returns.
+      if (Array.isArray(this._ryanQwenAllInputs) && this._ryanQwenAllInputs.length) {
+        this.inputs = [...this._ryanQwenAllInputs];
+      }
       const result = originalConfigure?.apply(this, arguments);
       const restored = restoreQwenState(this);
       this._ryanQwenAllInputs ||= [...(this.inputs || [])];
       if (!this.__ryanQwenImage21Installed) setupNode(this);
+      virtualizeQwenImageInputs(this);
       if (!restored) refreshQwenGalleryState(this);
       ensureQwenNumericDefaults(this);
       ensureQwenPromptInput(this);
