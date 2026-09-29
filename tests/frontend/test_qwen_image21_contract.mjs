@@ -86,3 +86,14 @@ test("Qwen prompt editors expose image mention completion and persist its manife
   assert.match(source, /prompt_mentions/);
   assert.match(source, /assetId/);
 });
+
+test("Qwen workbench persists and restores DOM-owned state across workflow reloads", () => {
+  assert.match(source, /const QWEN_STATE_PROP = "ryan_qwen_image_state"/);
+  assert.match(source, /function persistQwenState/);
+  assert.match(source, /function restoreQwenState/);
+  assert.match(source, /function installQwenPersistenceHooks/);
+  assert.match(source, /node\.properties\[QWEN_STATE_PROP\] = state/);
+  assert.match(source, /const restored = restoreQwenState\(this\)/);
+  assert.match(source, /refreshQwenGalleryState\(this\)/);
+  assert.match(source, /gallery_expanded/);
+});

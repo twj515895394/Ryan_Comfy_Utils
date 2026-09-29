@@ -16,6 +16,16 @@ const SLOT_PREFIX = "image_";
 const GALLERY_PREFIX = "gallery_";
 const SLOT_REORDER_MIME = "application/x-ryan-qwen-image-reorder";
 const QWEN_LINKS_PROP = "ryan_qwen_image_links";
+const QWEN_STATE_PROP = "ryan_qwen_image_state";
+const QWEN_STATE_VERSION = 1;
+const QWEN_PERSISTED_WIDGETS = [
+  "prompt",
+  "negative_prompt",
+  "aspect_ratio",
+  "megapixels",
+  "batch_size",
+  "resolution",
+];
 
 export function qwenImageSlotName(index) {
   return `${SLOT_PREFIX}${String(index).padStart(2, "0")}`;
@@ -47,6 +57,99 @@ function setWidgetValue(node, name, value) {
   if (!widget) return;
   widget.value = value;
   if (widget._state) widget._state.value = value;
+}
+
+function readStoredQwenState(node) {
+  let state = node?.properties?.[QWEN_STATE_PROP];
+  if (typeof state === "string") {
+    try {
+      state = JSON.parse(state);
+    } catch (_error) {
+      state = null;
+    }
+  }
+  return state && typeof state === "object" ? state : null;
+}
+
+function storedQwenGallery(state) {
+  return normalizeGalleryForState(Array.isArray(state?.gallery) ? state.gallery : []);
+}
+
+function qwenStateGallery(node) {
+  const gallery = normalizeGalleryForState(
+    node.__ryanQwenGalleryState?.gallery || getManifest(node),
+  );
+  if (node.__ryanQwenGalleryState) node.__ryanQwenGalleryState.gallery = gallery;
+  return gallery;
+}
+
+function persistQwenState(node) {
+  if (!node) return null;
+  node.properties ||= {};
+  const gallery = qwenStateGallery(node);
+  const promptMentions = getMentionManifest(node);
+  const state = {
+    version: QWEN_STATE_VERSION,
+    prompt: String(findWidget(node, "prompt")?.value ?? ""),
+    negative_prompt: String(findWidget(node, "negative_prompt")?.value ?? ""),
+    aspect_ratio: String(findWidget(node, "aspect_ratio")?.value ?? ""),
+    megapixels: Number(findWidget(node, "megapixels")?.value),
+    batch_size: Number(findWidget(node, "batch_size")?.value),
+    resolution: Number(findWidget(node, "resolution")?.value),
+    gallery,
+    prompt_mentions: promptMentions,
+    gallery_expanded: isGalleryExpanded(node),
+  };
+  for (const name of ["megapixels", "batch_size", "resolution"]) {
+    if (!Number.isFinite(state[name])) delete state[name];
+  }
+  node.properties[QWEN_STATE_PROP] = state;
+  return state;
+}
+
+function restoreQwenState(node) {
+  const state = readStoredQwenState(node);
+  if (!state) return false;
+
+  for (const name of QWEN_PERSISTED_WIDGETS) {
+    if (state[name] !== undefined) setWidgetValue(node, name, state[name]);
+  }
+  const gallery = storedQwenGallery(state);
+  updateGalleryHiddenWidgets(node, gallery);
+  if (Array.isArray(state.prompt_mentions)) {
+    setWidgetValue(node, "prompt_mentions", JSON.stringify(state.prompt_mentions));
+  }
+  if (typeof state.gallery_expanded === "boolean") {
+    node.__ryanQwenGalleryExpanded = state.gallery_expanded;
+  }
+  if (node.__ryanQwenGalleryState) {
+    node.__ryanQwenGalleryState.gallery = gallery;
+  }
+  return true;
+}
+
+function refreshQwenGalleryState(node) {
+  if (!node.__ryanQwenGalleryState) return;
+  node.__ryanQwenGalleryState.gallery = normalizeGalleryForState(getManifest(node));
+  // Older workflows can leave stale hidden gallery widgets behind after the
+  // DOM workbench has been inserted. Rebuild every backing slot from the
+  // manifest so an empty gallery cannot submit values such as "1" or "".
+  updateGalleryHiddenWidgets(node, node.__ryanQwenGalleryState.gallery);
+}
+
+function installQwenPersistenceHooks(node) {
+  for (const name of QWEN_PERSISTED_WIDGETS) {
+    const widget = findWidget(node, name);
+    if (!widget || widget.__ryanQwenPersistenceBound) continue;
+    widget.__ryanQwenPersistenceBound = true;
+    const originalCallback = widget.callback;
+    widget.callback = function persistQwenWidget(value) {
+      const result = originalCallback?.apply(this, arguments);
+      persistQwenState(node);
+      app.graph?.change?.();
+      return result;
+    };
+  }
 }
 
 function formatQwenMegapixelOption(value) {
@@ -766,6 +869,7 @@ function patchQwenGraphToPrompt() {
         if (originId != null) promptNode.inputs.prompt = [String(originId), Number(originSlot) || 0];
       }
       delete promptNode.inputs.prompt_text;
+      updateGalleryHiddenWidgets(node, qwenStateGallery(node));
       for (let slot = 1; slot <= MAX_SLOTS; slot += 1) {
         const galleryValue = findWidget(node, qwenGallerySlotName(slot))?.value;
         if (galleryValue) promptNode.inputs[qwenGallerySlotName(slot)] = galleryValue;
@@ -995,6 +1099,7 @@ function createImageGallery(node) {
     event.preventDefault();
     event.stopPropagation();
     node.__ryanQwenGalleryExpanded = !isGalleryExpanded(node);
+    persistQwenState(node);
     updateGalleryVisibility(node);
   });
   heading.append(headingLabel, toggle);
@@ -1005,6 +1110,7 @@ function createImageGallery(node) {
     sync() {
       this.gallery = normalizeGalleryForState(this.gallery);
       updateGalleryHiddenWidgets(node, this.gallery);
+      persistQwenState(node);
       updateGalleryVisibility(node);
       node.__ryanQwenRefreshMentions?.();
       app.graph?.change?.();
@@ -1083,6 +1189,8 @@ function createPromptEditor(node, field, label, minHeight) {
     }));
     setWidgetValue(node, storageField, serializeEditor());
     setWidgetValue(node, "prompt_mentions", JSON.stringify([...existing, ...mentions]));
+    persistQwenState(node);
+    app.graph?.change?.();
   }
 
   function makeChip(display, option, assetId = "") {
@@ -1256,6 +1364,7 @@ function setupNode(node) {
   patchQwenGraphToPrompt();
   ensureQwenNumericDefaults(node);
   ensureQwenPromptInput(node);
+  restoreQwenState(node);
   node._ryanQwenAllInputs ||= [...(node.inputs || [])];
   installSlotGeometry(node);
   installQwenCanvasBridge();
@@ -1318,6 +1427,7 @@ function setupNode(node) {
     node.__ryanQwenGalleryWidget = galleryWidget;
     node.__ryanQwenPromptWidget = promptWidget;
   }
+  installQwenPersistenceHooks(node);
   ensureQwenNodeSize(node);
 
   node.__ryanQwenRefreshMentions = () => promptEditors.forEach((editor) => editor.refresh());
@@ -1330,6 +1440,7 @@ function setupNode(node) {
     this.setDirtyCanvas?.(true, true);
     return result;
   };
+  persistQwenState(node);
   updateGalleryVisibility(node);
 }
 
@@ -1347,12 +1458,16 @@ app.registerExtension({
     const originalConfigure = nodeType.prototype.configure;
     nodeType.prototype.configure = function configureQwenImage21(info) {
       const result = originalConfigure?.apply(this, arguments);
+      const restored = restoreQwenState(this);
       this._ryanQwenAllInputs ||= [...(this.inputs || [])];
       if (!this.__ryanQwenImage21Installed) setupNode(this);
+      if (!restored) refreshQwenGalleryState(this);
       ensureQwenNumericDefaults(this);
       ensureQwenPromptInput(this);
+      installQwenPersistenceHooks(this);
       updateQwenPromptConnectionState(this);
       this.__ryanQwenRefreshMentions?.();
+      persistQwenState(this);
       updateGalleryVisibility(this);
       return result;
     };
