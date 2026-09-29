@@ -59,8 +59,9 @@ test("Qwen gallery follows the H3-style in-node image workbench layout", () => {
   assert.match(source, /ryan-qwen-image-toggle/);
   assert.match(source, /展开其余/);
   assert.match(source, /点击添加图片/);
-  assert.match(source, /node\.removeInput/);
-  assert.match(source, /pruneQwenImageInputs/);
+  assert.match(source, /input\.hidden = true/);
+  assert.match(source, /sourceNode\.connect/);
+  assert.match(source, /qwenNativeImageInput/);
   assert.match(source, /patchQwenGraphToPrompt/);
   assert.match(source, /installQwenCanvasBridge/);
   assert.match(source, /ryan-qwen-workbench/);
@@ -73,6 +74,8 @@ test("Qwen gallery follows the H3-style in-node image workbench layout", () => {
   assert.match(source, /contentEditable = connected \? "false" : "true"/);
   assert.match(source, /promptInput\.link/);
   assert.doesNotMatch(source, /forceInput/);
+  assert.doesNotMatch(source, /pruneQwenImageInputs/);
+  assert.doesNotMatch(source, /node\.removeInput/);
   assert.doesNotMatch(source, /promptNode\.inputs\.prompt_text\s*=/);
 });
 
