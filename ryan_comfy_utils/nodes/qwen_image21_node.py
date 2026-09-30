@@ -24,7 +24,7 @@ ASPECT_RATIOS: dict[str, tuple[int, int]] = {
 }
 
 MEGAPIXEL_OPTIONS = (0.5, 0.75, 0.98, 1.0, 1.5, 2.0, 3.0, 4.0)
-DEFAULT_MEGAPIXELS = 1.0
+DEFAULT_MEGAPIXELS = 2.0
 
 MAX_IMAGE_SLOTS = 16
 MIN_QWEN_SIZE = 16
@@ -477,7 +477,7 @@ class RyanQwenImage21:
                     "STRING",
                     {"default": "", "multiline": True, "dynamicPrompts": True},
                 ),
-                "aspect_ratio": (list(ASPECT_RATIOS.keys()), {"default": "1:1 (Square)"}),
+                "aspect_ratio": (list(ASPECT_RATIOS.keys()), {"default": "9:16 (Portrait Widescreen)"}),
                 "megapixels": (
                     list(MEGAPIXEL_OPTIONS),
                     {"default": DEFAULT_MEGAPIXELS},

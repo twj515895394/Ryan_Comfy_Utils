@@ -6,11 +6,14 @@ const MAX_SLOTS = 16;
 const SLOTS_PER_ROW = 4;
 const DEFAULT_VISIBLE_SLOTS = SLOTS_PER_ROW;
 const QWEN_NODE_MIN_WIDTH = 430;
+const QWEN_IMAGE_SLOT_LAYOUT_POS = [12, 28];
+const QWEN_HIDDEN_WIDGET_SIZE = [0, -4];
 const QWEN_NUMERIC_DEFAULTS = {
-  megapixels: 1.0,
+  megapixels: 2.0,
   batch_size: 1,
   resolution: 1024,
 };
+const QWEN_ASPECT_RATIO_DEFAULT = "9:16 (Portrait Widescreen)";
 const QWEN_MEGAPIXEL_OPTIONS = [0.5, 0.75, 0.98, 1.0, 1.5, 2.0, 3.0, 4.0];
 const SLOT_PREFIX = "image_";
 const GALLERY_PREFIX = "gallery_";
@@ -26,6 +29,8 @@ const QWEN_PERSISTED_WIDGETS = [
   "batch_size",
   "resolution",
 ];
+let qwenCanvasBridgeCanvas = null;
+let qwenCanvasBridgeCleanup = null;
 
 export function qwenImageSlotName(index) {
   return `${SLOT_PREFIX}${String(index).padStart(2, "0")}`;
@@ -195,6 +200,13 @@ function ensureQwenMegapixelDisplay(node) {
 }
 
 function ensureQwenNumericDefaults(node) {
+  const aspectRatio = findWidget(node, "aspect_ratio");
+  if (aspectRatio) {
+    const value = String(aspectRatio.value ?? "").trim();
+    // A newly-created Vue widget can briefly expose its field name as the
+    // value. Treat that, empty values, and non-ratio values as unhydrated.
+    if (!/^\d+\s*:\s*\d+/.test(value)) setWidgetValue(node, "aspect_ratio", QWEN_ASPECT_RATIO_DEFAULT);
+  }
   let resolution = findWidget(node, "resolution");
   const legacyResolution = findWidget(node, "reference_resolution");
   if (!resolution && legacyResolution) {
@@ -223,6 +235,21 @@ function ensureQwenNumericDefaults(node) {
     if (!valid) setWidgetValue(node, name, fallback);
   }
   ensureQwenMegapixelDisplay(node);
+}
+
+function repairQwenWidgetValuesSoon(node) {
+  if (!node || node.__ryanQwenWidgetRepairScheduled) return;
+  node.__ryanQwenWidgetRepairScheduled = true;
+  // Vue may populate the visible widgets just after LiteGraph calls
+  // onNodeCreated. Reapply only invalid values after that hydration window;
+  // legitimate workflow values and later user selections remain untouched.
+  for (const delay of [0, 80, 500]) {
+    setTimeout(() => {
+      if (!node) return;
+      ensureQwenNumericDefaults(node);
+      node.setDirtyCanvas?.(true, true);
+    }, delay);
+  }
 }
 
 function ensureQwenPromptInput(node) {
@@ -257,11 +284,61 @@ function ensureQwenPromptInput(node) {
   return input;
 }
 
+function ensureQwenTypedInputs(node) {
+  if (!node?.inputs) return;
+  for (const input of node.inputs) {
+    if (input?.name === "clip") input.type = "CLIP";
+    else if (input?.name === "vae") input.type = "VAE";
+    else if (input?.name === "prompt") input.type = "STRING";
+    else if (isQwenImageInput(input)) input.type = "IMAGE";
+  }
+}
+
+
 function ensureQwenNodeSize(node) {
   const measured = node.computeSize?.() || node.size || [QWEN_NODE_MIN_WIDTH, 0];
   const width = Math.max(QWEN_NODE_MIN_WIDTH, Number(measured[0]) || 0, Number(node.size?.[0]) || 0);
   const height = Math.max(1, Number(measured[1]) || 0);
   node.setSize?.([width, height]);
+}
+
+function isQwenBackingWidget(widget) {
+  const name = String(widget?.name || "");
+  return /^gallery_\d+$/.test(name) || name === "gallery_manifest" || name === "prompt_mentions";
+}
+
+function compactQwenBackingWidgets(node) {
+  for (const widget of node?.widgets || []) {
+    if (!isQwenBackingWidget(widget)) continue;
+    widget.hidden = true;
+    widget.computeSize = () => QWEN_HIDDEN_WIDGET_SIZE;
+    if (widget.options) {
+      widget.options.hidden = true;
+      widget.options.canvasOnly = true;
+    }
+    if (widget._state) {
+      widget._state.hidden = true;
+      widget._state.computedHeight = 0;
+    }
+    widget.computedHeight = 0;
+  }
+}
+
+function withQwenImageInputsExcludedFromLayout(node, fn) {
+  const originalInputs = node?.inputs;
+  const originalConcrete = node?._concreteInputs;
+  if (Array.isArray(originalInputs)) {
+    node.inputs = originalInputs.filter((input) => !isQwenImageInput(input));
+  }
+  if (Array.isArray(originalConcrete)) {
+    node._concreteInputs = originalConcrete.filter((input) => !isQwenImageInput(input));
+  }
+  try {
+    return fn();
+  } finally {
+    if (originalInputs) node.inputs = originalInputs;
+    if (originalConcrete) node._concreteInputs = originalConcrete;
+  }
 }
 
 function getManifest(node) {
@@ -350,6 +427,108 @@ function qwenNativeImageInput(node, slot) {
     || null;
 }
 
+function qwenImageSlotSource(node, slot) {
+  const input = qwenNativeImageInput(node, slot);
+  const graph = node?.graph || app.graph;
+  if (input?.link != null) {
+    const index = node.inputs?.findIndex?.((item) => item?.name === input.name) ?? -1;
+    const sourceNodeFromInput = index >= 0 && typeof node.getInputNode === "function"
+      ? node.getInputNode(index)
+      : null;
+    const native = getNativeGraphLink(graph, input.link);
+    const sourceId = sourceNodeFromInput?.id ?? native?.origin_id ?? native?.originId ?? native?.from_id;
+    const sourceSlot = native?.origin_slot ?? native?.originSlot ?? 0;
+    const sourceNode = sourceNodeFromInput
+      || (sourceId != null ? graph?.getNodeById?.(Number(sourceId)) : null);
+    if (sourceId != null) {
+      return { sourceNode, sourceId, sourceSlot: Number(sourceSlot) || 0 };
+    }
+  }
+  const link = qwenLinks(node).find((item) => Number(item.slot) === Number(slot));
+  if (!link?.source_id) return null;
+  return {
+    sourceNode: graph?.getNodeById?.(Number(link.source_id)) || null,
+    sourceId: link.source_id,
+    sourceSlot: Number(link.source_slot) || 0,
+  };
+}
+
+function qwenImageSlotPromptRef(node, slot) {
+  const source = qwenImageSlotSource(node, slot);
+  if (source?.sourceId == null) return null;
+  return [String(source.sourceId), Number(source.sourceSlot) || 0];
+}
+
+function qwenWidgetImagePath(value) {
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) return null;
+    return { name: trimmed, subfolder: "", type: "input" };
+  }
+  if (value && typeof value === "object" && value.name) {
+    return {
+      name: String(value.name),
+      subfolder: String(value.subfolder || ""),
+      type: String(value.type || "input"),
+    };
+  }
+  return null;
+}
+
+function qwenSourcePreviewUrl(sourceNode) {
+  if (!sourceNode) return "";
+  const imageWidget = sourceNode.widgets?.find((widget) => String(widget?.name || "").toLowerCase() === "image");
+  const imagePath = qwenWidgetImagePath(imageWidget?.value);
+  if (imagePath) return viewUrl(imagePath);
+  const fromImgs = (sourceNode.imgs || []).find((item) => item?.src);
+  if (fromImgs?.src) return fromImgs.src;
+  for (const widget of sourceNode.widgets || []) {
+    const path = qwenWidgetImagePath(widget?.value);
+    if (path && /\.(png|jpe?g|webp|gif|bmp)$/i.test(path.name)) return viewUrl(path);
+  }
+  return "";
+}
+
+function qwenSourceFilename(sourceNode) {
+  const imageWidget = sourceNode?.widgets?.find((widget) => String(widget?.name || "").toLowerCase() === "image");
+  return qwenWidgetImagePath(imageWidget?.value)?.name || "";
+}
+
+function refreshQwenSourcePreviewTargets(sourceNode) {
+  for (const target of sourceNode?.__ryanQwenPreviewTargets || []) {
+    target.__ryanQwenRenderGallery?.();
+    target.setDirtyCanvas?.(true, true);
+  }
+}
+
+function watchQwenImageSourceNode(sourceNode, targetNode) {
+  if (!sourceNode || !targetNode) return;
+  sourceNode.__ryanQwenPreviewTargets ||= new Set();
+  sourceNode.__ryanQwenPreviewTargets.add(targetNode);
+  for (const widget of sourceNode.widgets || []) {
+    if (!widget || widget.__ryanQwenImageSourceWatchInstalled) continue;
+    widget.__ryanQwenImageSourceWatchInstalled = true;
+    const originalCallback = widget.callback;
+    widget.callback = function onQwenImageSourceWidgetChange() {
+      const result = originalCallback?.apply(this, arguments);
+      refreshQwenSourcePreviewTargets(sourceNode);
+      return result;
+    };
+    const element = widget.inputEl || widget.element;
+    element?.addEventListener?.("change", () => refreshQwenSourcePreviewTargets(sourceNode), true);
+  }
+  if (sourceNode.__ryanQwenImageSourceWatchInstalled) return;
+  sourceNode.__ryanQwenImageSourceWatchInstalled = true;
+  const originalExecuted = sourceNode.onExecuted;
+  sourceNode.onExecuted = function onExecutedQwenImageSource() {
+    const result = originalExecuted?.apply(this, arguments);
+    refreshQwenSourcePreviewTargets(sourceNode);
+    return result;
+  };
+}
+
+
+
 function writeQwenVirtualLink(node, targetSlot, sourceId, sourceSlot, sourceType = "IMAGE") {
   const slot = Number(targetSlot);
   if (!node || !Number.isInteger(slot) || slot < 1 || slot > MAX_SLOTS || sourceId == null) return false;
@@ -384,50 +563,27 @@ function addQwenVirtualLink(node, sourceNode, sourceSlot, targetSlot) {
   return true;
 }
 
-function migrateQwenNativeImageLinks(node) {
-  const graph = node?.graph || app.graph;
-  for (const input of node?.inputs || []) {
-    if (!isQwenImageInput(input) || input.link == null) continue;
-    const targetSlot = Number(String(input.name).slice(6));
-    const native = getNativeGraphLink(graph, input.link);
-    const originId = native?.origin_id ?? native?.originId;
-    if (originId == null) continue;
-    const originSlot = native?.origin_slot ?? native?.originSlot ?? 0;
-    const sourceNode = graph?.getNodeById?.(Number(originId));
-    const output = sourceNode?.outputs?.[Number(originSlot)] || {};
-    writeQwenVirtualLink(
-      node,
-      targetSlot,
-      originId,
-      originSlot,
-      native?.type || output.type || output.datatype || output.label || "IMAGE",
-    );
-  }
-}
-
-function disconnectQwenNativeInput(node, inputIndex) {
-  const input = node?.inputs?.[inputIndex];
-  if (!input || input.link == null) return;
-  try {
-    node.disconnectInput?.(inputIndex);
-  } catch (_error) { /* The link is removed from the node below if needed. */ }
-  input.link = null;
-}
-
-function virtualizeQwenImageInputs(node) {
+function restoreQwenImageInputs(node) {
   if (!node || !Array.isArray(node.inputs)) return;
-  migrateQwenNativeImageLinks(node);
-  for (let index = node.inputs.length - 1; index >= 0; index -= 1) {
-    if (!isQwenImageInput(node.inputs[index])) continue;
-    disconnectQwenNativeInput(node, index);
-    // H3 does not keep one hidden native socket per gallery cell. The gallery
-    // cells are the actual input surface and graphToPrompt serializes these
-    // virtual links back to the backend's image_01...image_16 fields.
-    node.inputs.splice(index, 1);
+  const originalInputs = node._ryanQwenAllInputs || [];
+  if (!originalInputs.length) {
+    node._ryanQwenAllInputs = [...node.inputs];
+    return;
   }
-  node._ryanQwenImageInputsVirtualized = true;
+  const currentByName = new Map(node.inputs.map((input) => [input?.name, input]));
+  const restored = originalInputs.map((input) => currentByName.get(input?.name) || input);
+  const knownNames = new Set(restored.map((input) => input?.name));
+  for (const input of node.inputs) {
+    if (!knownNames.has(input?.name)) restored.push(input);
+  }
+  // These inputs are the real LiteGraph targets. They must remain in
+  // node.inputs for LinkConnector to detect and snap to the green gallery
+  // ports; visibility and geometry are handled separately below.
+  node.inputs = restored;
 }
 
+// Compatibility for virtual links stored by earlier frontend revisions. New
+// connections use the native inputs restored above and never enter this path.
 function connectQwenImageInput(node, sourceNode, sourceSlot, slot) {
   return addQwenVirtualLink(node, sourceNode, sourceSlot, slot);
 }
@@ -445,9 +601,37 @@ function removeQwenVirtualLink(node, slot) {
   return true;
 }
 
+function clearQwenImageSlot(node, slot) {
+  const index = node?.inputs?.findIndex?.((input) => input?.name === qwenImageSlotName(slot)) ?? -1;
+  if (index >= 0) node.disconnectInput?.(index);
+  node.properties ||= {};
+  node.properties[QWEN_LINKS_PROP] = qwenLinks(node).filter((link) => Number(link.slot) !== Number(slot));
+  if (node.__ryanQwenGalleryState) {
+    node.__ryanQwenGalleryState.gallery = (node.__ryanQwenGalleryState.gallery || []).filter(
+      (asset) => Number(asset.slot) !== Number(slot),
+    );
+    updateGalleryHiddenWidgets(node, node.__ryanQwenGalleryState.gallery);
+  }
+  persistQwenState(node);
+  updateGalleryVisibility(node);
+  node.__ryanQwenRefreshMentions?.();
+  node.setDirtyCanvas?.(true, true);
+  app.graph?.setDirtyCanvas?.(true, true);
+  app.graph?.change?.();
+  return true;
+}
+
+
 function isExternalSlotConnected(node, slot) {
   const input = qwenNativeImageInput(node, slot);
-  return input?.link != null || qwenLinks(node).some((link) => Number(link.slot) === Number(slot));
+  const linkId = input?.link;
+  if (linkId != null && Number(linkId) >= 0 && getNativeGraphLink(node?.graph || app.graph, linkId)) {
+    return true;
+  }
+  const virtual = qwenLinks(node).find((link) => Number(link.slot) === Number(slot));
+  if (!virtual) return false;
+  const graph = node?.graph || app.graph;
+  return graph?.getNodeById?.(Number(virtual.source_id)) != null;
 }
 
 function activeMentionOptions(node) {
@@ -505,6 +689,7 @@ function isGalleryExpanded(node) {
   return hasHiddenGalleryContent(node);
 }
 
+
 function visibleGallerySlotCount(node) {
   return isGalleryExpanded(node) ? MAX_SLOTS : DEFAULT_VISIBLE_SLOTS;
 }
@@ -514,14 +699,19 @@ function updateGalleryVisibility(node) {
   if (!node._ryanQwenAllInputs) node._ryanQwenAllInputs = [...(node.inputs || [])];
   for (const input of node.inputs || []) {
     if (!isQwenImageInput(input)) continue;
-    // Native image sockets only exist briefly while a saved workflow is being
-    // restored. They are never part of the visible node after virtualization.
+    // Keep the real LiteGraph inputs hidden from the left edge while their
+    // custom positions are mapped to the gallery's green ports.
     input.hidden = true;
+    input.pos = QWEN_IMAGE_SLOT_LAYOUT_POS;
     input.__ryanQwenSlotVisible = Number(input.name.slice(6)) <= visibleCount;
   }
   node.__ryanQwenVisibleSlotCount = visibleCount;
+  compactQwenBackingWidgets(node);
   node.__ryanQwenRenderGallery?.();
   node._widgetSlotsDirty = true;
+  // DOM gallery rendering above is synchronous. A second requestAnimationFrame
+  // resize can re-enter ComfyUI's DOM-widget layout pass and make the node
+  // height grow without bound, so size is calculated exactly once here.
   ensureQwenNodeSize(node);
   app.graph?.setDirtyCanvas?.(true, true);
 }
@@ -639,15 +829,10 @@ function qwenPromptSlotHit(node, x, y) {
   const element = qwenPromptElement(node);
   const rect = element?.getBoundingClientRect?.();
   if (!rect || (!rect.width && !rect.height)) return false;
-  const topLeft = clientToGraph(app.canvas, rect.left - 18, rect.top - 8);
+  const topLeft = clientToGraph(app.canvas, rect.left, rect.top);
   const bottomRight = clientToGraph(app.canvas, rect.right, rect.bottom);
-  return Boolean(
-    topLeft && bottomRight
-      && x >= topLeft[0]
-      && x <= bottomRight[0]
-      && y >= topLeft[1]
-      && y <= bottomRight[1],
-  );
+  if (!topLeft || !bottomRight) return false;
+  return x >= topLeft[0] - 14 && x <= bottomRight[0] && y >= topLeft[1] && y <= bottomRight[1];
 }
 
 function updateQwenPromptConnectionState(node) {
@@ -663,6 +848,27 @@ function updateQwenPromptConnectionState(node) {
   }
   node?.__ryanQwenPromptWrap?.classList?.toggle("is-connected", connected);
 }
+
+
+function collapsedGalleryInputGraphPos(node) {
+  // LiteGraph measures the bounding rectangle of every native input. A
+  // synthetic off-canvas position therefore turns a collapsed slot into an
+  // enormous node. Keep inactive inputs on the first in-grid port instead;
+  // the gallery DOM covers their duplicate canvas labels and the first input
+  // wins hit testing at that position.
+  return galleryCellGraphPos(node, 1) || [
+    (Number(node?.pos?.[0]) || 0) + 24,
+    (Number(node?.pos?.[1]) || 0) + 32,
+  ];
+}
+
+function qwenImageSlotGraphPos(node, input) {
+  if (input?.__ryanQwenSlotVisible) {
+    return galleryCellGraphPos(node, Number(input.name.slice(6))) || collapsedGalleryInputGraphPos(node);
+  }
+  return collapsedGalleryInputGraphPos(node);
+}
+
 
 function installSlotGeometry(node) {
   if (!node || node.__ryanQwenSlotGeometryInstalled) return;
@@ -680,8 +886,8 @@ function installSlotGeometry(node) {
           return point;
         }
       }
-      if (isQwenImageInput(input) && input.__ryanQwenSlotVisible) {
-        const graph = galleryCellGraphPos(this, Number(input.name.slice(6)));
+      if (isQwenImageInput(input)) {
+        const graph = qwenImageSlotGraphPos(this, input);
         if (graph) {
           const point = out || [0, 0];
           point[0] = graph[0];
@@ -700,8 +906,8 @@ function installSlotGeometry(node) {
         const graph = qwenPromptGraphPos(this);
         if (graph) return graph;
       }
-      if (isQwenImageInput(input) && input.__ryanQwenSlotVisible) {
-        const graph = galleryCellGraphPos(this, Number(input.name.slice(6)));
+      if (isQwenImageInput(input)) {
+        const graph = qwenImageSlotGraphPos(this, input);
         if (graph) return graph;
       }
       return originalGetInputPos.apply(this, arguments);
@@ -736,14 +942,16 @@ function installSlotGeometry(node) {
   }
   const originalComputeSize = node.computeSize;
   if (typeof originalComputeSize === "function") {
-    node.computeSize = function computeSizeWithoutQwenImageInputs(out) {
-      const originalInputs = this.inputs;
-      this.inputs = (originalInputs || []).filter((input) => !isQwenImageInput(input));
-      try {
-        return originalComputeSize.apply(this, arguments);
-      } finally {
-        this.inputs = originalInputs;
-      }
+    node.computeSize = function computeSizeWithoutQwenImageInputs() {
+      return withQwenImageInputsExcludedFromLayout(this, () => originalComputeSize.apply(this, arguments));
+    };
+  }
+  const originalArrange = node.arrange;
+  if (typeof originalArrange === "function") {
+    node.arrange = function arrangeWithoutQwenImageInputs() {
+      // LinkConnector still sees image_* via getInputPos. arrange/_measureSlots
+      // must not, or gallery DOM coordinates ratchet widgetStartY every frame.
+      return withQwenImageInputsExcludedFromLayout(this, () => originalArrange.apply(this, arguments));
     };
   }
 }
@@ -753,11 +961,18 @@ function qwenConnectingOutput(canvas) {
   if (!sourceNode) return null;
   const raw = canvas.connecting_output ?? canvas.connecting_slot ?? canvas.connecting_output_slot;
   if (raw == null && canvas.connecting_input) return null;
-  const sourceSlot = typeof raw === "number"
+  const candidateSlot = typeof raw === "number" || typeof raw === "string"
     ? raw
-    : Number(raw?.slot_index ?? raw?.slot ?? raw ?? 0);
-  if (!Number.isFinite(sourceSlot)) return null;
-  const output = sourceNode.outputs?.[sourceSlot] || {};
+    : raw?.slot_index ?? raw?.slot ?? raw?.index;
+  const parsedSlot = Number(candidateSlot);
+  // Nodes 2.0 can store the output socket object itself instead of its index.
+  // Mirror H3's fallback: keep a usable output endpoint instead of discarding
+  // the gesture when that object has no slot metadata.
+  const objectIndex = sourceNode.outputs?.indexOf?.(raw);
+  const sourceSlot = Number.isFinite(parsedSlot)
+    ? parsedSlot
+    : (objectIndex >= 0 ? objectIndex : 0);
+  const output = sourceNode.outputs?.[sourceSlot] || raw || {};
   return {
     sourceNode,
     sourceSlot,
@@ -794,6 +1009,10 @@ function qwenPendingConnectorOutput(canvas) {
 }
 
 function qwenPendingConnectorLink(canvas) {
+  const connecting = qwenConnectingOutput(canvas);
+  if (connecting) {
+    return { direction: "from_output", ...connecting };
+  }
   const link = canvas?.linkConnector?.renderLinks?.at?.(0);
   if (link) {
     const endpointNode = link.node || link.fromNode || link.originNode || link.sourceNode
@@ -806,33 +1025,90 @@ function qwenPendingConnectorLink(canvas) {
     if (inputIndex >= 0 && outputIndex < 0) direction = "from_input";
     if (outputIndex >= 0 && inputIndex < 0) direction = "from_output";
     if (direction === "from_input") return null;
-    if (endpointNode && outputIndex >= 0) {
-      const output = endpointNode.outputs?.[outputIndex] || endpointSlot || {};
+    const indexed = Number(link.fromSlotIndex ?? link.outputIndex);
+    const sourceSlot = outputIndex >= 0
+      ? outputIndex
+      : (Number.isInteger(indexed) && indexed >= 0 ? indexed : -1);
+    if (endpointNode && sourceSlot >= 0) {
+      const output = endpointNode.outputs?.[sourceSlot] || endpointSlot || {};
       return {
-        direction,
+        direction: "from_output",
         sourceNode: endpointNode,
-        sourceSlot: outputIndex,
+        sourceSlot,
+        sourceType: output.type || output.datatype || output.label || "IMAGE",
+      };
+    }
+    if (endpointNode) {
+      const output = endpointSlot || endpointNode.outputs?.[0] || {};
+      return {
+        direction: "from_output",
+        sourceNode: endpointNode,
+        sourceSlot: 0,
         sourceType: output.type || output.datatype || output.label || "IMAGE",
       };
     }
   }
-  const connecting = qwenConnectingOutput(canvas);
-  return connecting
-    ? { direction: "from_output", ...connecting }
-    : null;
+  return null;
 }
 
-function qwenGalleryCellFromEvent(event) {
-  const clientX = Number(event?.clientX);
-  const clientY = Number(event?.clientY);
+function qwenEventClientPoint(event) {
+  const detail = event?.detail;
+  const candidates = [event, detail?.originalEvent, detail?.event, detail];
+  for (const candidate of candidates) {
+    const clientX = Number(candidate?.clientX);
+    const clientY = Number(candidate?.clientY);
+    if (Number.isFinite(clientX) && Number.isFinite(clientY)) return { clientX, clientY };
+  }
+
+  // LinkConnector dispatches `dropped-on-canvas` as a CustomEvent whose
+  // detail is the LiteGraph canvas event. Some frontend builds expose only
+  // graph-space coordinates there, so convert them back to screen space for
+  // the DOM gallery hit test.
+  for (const candidate of candidates) {
+    const canvasX = Number(candidate?.canvasX);
+    const canvasY = Number(candidate?.canvasY);
+    const rect = app.canvas?.canvas?.getBoundingClientRect?.();
+    if (!Number.isFinite(canvasX) || !Number.isFinite(canvasY) || !rect) continue;
+    const scale = app.canvas?.ds?.scale || 1;
+    const offset = app.canvas?.ds?.offset || [0, 0];
+    return {
+      clientX: (canvasX + Number(offset[0] || 0)) * scale + rect.left,
+      clientY: (canvasY + Number(offset[1] || 0)) * scale + rect.top,
+    };
+  }
+  return null;
+}
+
+function qwenNodeFromGallery(gallery, preferredNode) {
+  if (preferredNode?.__ryanQwenImage21Installed) {
+    if (!preferredNode.__ryanQwenGallery || preferredNode.__ryanQwenGallery === gallery) {
+      return preferredNode;
+    }
+  }
+  const graph = app.graph;
+  const owned = graph?._nodes?.find((node) => node?.__ryanQwenGallery === gallery);
+  if (owned) return owned;
+  const rawId = gallery?.dataset?.qwenNodeId;
+  if (rawId == null || rawId === "") return null;
+  return graph?.getNodeById?.(Number(rawId))
+    || graph?.getNodeById?.(rawId)
+    || graph?.getNodeById?.(String(rawId))
+    || null;
+}
+
+function qwenGalleryCellFromEvent(event, preferredNode = null) {
+  const point = qwenEventClientPoint(event);
+  const clientX = Number(point?.clientX);
+  const clientY = Number(point?.clientY);
   if (!Number.isFinite(clientX) || !Number.isFinite(clientY)) return null;
   const element = document.elementFromPoint(clientX, clientY);
   const cell = element?.closest?.(".ryan-qwen-image-slot");
   if (!cell || cell.classList.contains("is-disabled")) return null;
   const gallery = cell.closest(".ryan-qwen-image-gallery");
-  const node = app.graph?.getNodeById?.(Number(gallery?.dataset?.qwenNodeId));
   const slot = Number(cell.dataset.qwenSlot);
-  if (!node || !Number.isInteger(slot)) return null;
+  if (!Number.isInteger(slot)) return null;
+  const node = qwenNodeFromGallery(gallery, preferredNode);
+  if (!node) return null;
   return { node, slot };
 }
 
@@ -872,7 +1148,15 @@ function drawQwenVirtualLinks(canvas, context) {
 
 function installQwenCanvasBridge() {
   const canvas = app.canvas;
-  if (!canvas?.canvas || canvas.__ryanQwenCanvasBridgeInstalled) return;
+  if (!canvas?.canvas) return false;
+  if (canvas === qwenCanvasBridgeCanvas && canvas.__ryanQwenCanvasBridgeInstalled) return true;
+
+  // Nodes 2.0 can replace app.canvas during initialization or reload. Keep
+  // exactly one live bridge so stale canvases cannot retain a competing drag
+  // lifecycle after the replacement has taken over.
+  qwenCanvasBridgeCleanup?.();
+  qwenCanvasBridgeCleanup = null;
+  qwenCanvasBridgeCanvas = canvas;
   canvas.__ryanQwenCanvasBridgeInstalled = true;
   let lastDraggedOutput = null;
   let lastCapturedDropAt = 0;
@@ -887,7 +1171,8 @@ function installQwenCanvasBridge() {
     }
   };
   const handleDrop = (event) => {
-    if (event?.button > 0 || performance.now() - lastCapturedDropAt < 80) return;
+    if (event?.button > 0 || (lastCapturedDropAt && performance.now() - lastCapturedDropAt < 80)) return;
+    const preferredNode = event?.detail?.node?.__ryanQwenImage21Installed ? event.detail.node : null;
     const live = qwenPendingConnectorLink(canvas);
     if (live?.direction === "from_output") {
       lastDraggedOutput = {
@@ -897,7 +1182,7 @@ function installQwenCanvasBridge() {
       };
     }
     const current = live?.direction === "from_output" ? live : lastDraggedOutput;
-    const hit = qwenGalleryCellFromEvent(event);
+    const hit = qwenGalleryCellFromEvent(event, preferredNode);
     if (!current || !hit || Number(current.sourceNode?.id) === Number(hit.node.id)) return;
     if (!connectQwenImageInput(hit.node, current.sourceNode, current.sourceSlot, hit.slot)) return;
     lastCapturedDropAt = performance.now();
@@ -920,17 +1205,46 @@ function installQwenCanvasBridge() {
   }
   const events = canvas.linkConnector?.events;
   const beforeDropLinksHandler = () => rememberOutput();
-  const droppedOnCanvasHandler = () => rememberOutput();
+  const droppedOnCanvasHandler = (event) => handleDrop(event);
+  const resetHandler = () => rememberOutput();
   events?.addEventListener?.("before-drop-links", beforeDropLinksHandler, { capture: true });
   events?.addEventListener?.("dropped-on-canvas", droppedOnCanvasHandler, { capture: true });
+  events?.addEventListener?.("dropped-on-node", handleDrop, { capture: true });
+  events?.addEventListener?.("reset", resetHandler, { capture: true });
+  const originalDraw = canvas.drawConnections;
+  let drawConnectionsWithQwenLinks = null;
   if (typeof canvas.drawConnections === "function") {
-    const originalDraw = canvas.drawConnections;
-    canvas.drawConnections = function drawConnectionsWithQwenLinks(context) {
+    drawConnectionsWithQwenLinks = function drawConnectionsWithQwenLinks(context) {
       const result = originalDraw?.apply(this, arguments);
       drawQwenVirtualLinks(this, context || this.bgctx || this.ctx);
       return result;
     };
+    canvas.drawConnections = drawConnectionsWithQwenLinks;
   }
+  qwenCanvasBridgeCleanup = () => {
+    for (const target of pointerTargets) {
+      target.removeEventListener?.("pointerdown", rememberOutput, true);
+      target.removeEventListener?.("pointermove", rememberOutput, true);
+      target.removeEventListener?.("pointerup", handleDrop, true);
+      target.removeEventListener?.("mouseup", handleDrop, true);
+    }
+    events?.removeEventListener?.("before-drop-links", beforeDropLinksHandler, { capture: true });
+    events?.removeEventListener?.("dropped-on-canvas", droppedOnCanvasHandler, { capture: true });
+    events?.removeEventListener?.("dropped-on-node", handleDrop, { capture: true });
+    events?.removeEventListener?.("reset", resetHandler, { capture: true });
+    if (canvas.drawConnections === drawConnectionsWithQwenLinks) canvas.drawConnections = originalDraw;
+    canvas.__ryanQwenCanvasBridgeInstalled = false;
+    if (qwenCanvasBridgeCanvas === canvas) qwenCanvasBridgeCanvas = null;
+  };
+  return true;
+}
+
+function ensureQwenCanvasBridgeSoon() {
+  installQwenCanvasBridge();
+  // ComfyUI can create this extension before the live canvas exists. Match
+  // H3's delayed retries so gallery ports do not silently lose their bridge.
+  setTimeout(() => installQwenCanvasBridge(), 0);
+  setTimeout(() => installQwenCanvasBridge(), 500);
 }
 
 function patchQwenGraphToPrompt() {
@@ -946,14 +1260,15 @@ function patchQwenGraphToPrompt() {
       promptNode.inputs ||= {};
       for (let slot = 1; slot <= MAX_SLOTS; slot += 1) {
         const inputName = qwenImageSlotName(slot);
-        delete promptNode.inputs[inputName];
-        const link = qwenLinks(node).find((item) => Number(item.slot) === slot);
-        if (link?.source_id != null) {
-          promptNode.inputs[inputName] = [
-            String(link.source_id),
-            Number(link.source_slot) || 0,
-          ];
+        const existing = promptNode.inputs[inputName];
+        const ref = qwenImageSlotPromptRef(node, slot);
+        if (ref) {
+          if (!Array.isArray(existing) || existing.length < 2) {
+            promptNode.inputs[inputName] = ref;
+          }
+          continue;
         }
+        delete promptNode.inputs[inputName];
       }
       const promptInput = node.inputs?.find((input) => input.name === "prompt");
       const existingPrompt = promptNode.inputs.prompt;
@@ -1105,6 +1420,7 @@ function renderImageGallery(node) {
   if (!root || !state) return;
   const count = visibleGallerySlotCount(node);
   const expanded = isGalleryExpanded(node);
+  root.dataset.qwenNodeId = String(node.id ?? "");
   root.dataset.slotCount = String(count);
   root.dataset.expanded = expanded ? "true" : "false";
   const heading = root.querySelector(".ryan-qwen-image-heading");
@@ -1122,6 +1438,9 @@ function renderImageGallery(node) {
     const externallyConnected = isExternalSlotConnected(node, slot);
     const wired = externallyConnected;
     const item = galleryAssetAtSlot(state.gallery, slot);
+    const source = wired ? qwenImageSlotSource(node, slot) : null;
+    if (source?.sourceNode) watchQwenImageSourceNode(source.sourceNode, node);
+    const previewSrc = item?.path ? viewUrl(item.path) : qwenSourcePreviewUrl(source?.sourceNode);
     const hasImage = Boolean(wired || item);
     cell.hidden = !active;
     cell.style.display = active ? "flex" : "none";
@@ -1132,12 +1451,12 @@ function renderImageGallery(node) {
     if (!item || wired) cell.draggable = false;
     cell.replaceChildren();
 
-    if (item?.path) {
+    if (previewSrc) {
       const preview = document.createElement("img");
       preview.className = "ryan-qwen-image-preview";
       preview.alt = "";
       preview.draggable = false;
-      preview.src = viewUrl(item.path);
+      preview.src = previewSrc;
       cell.append(preview);
     }
 
@@ -1151,7 +1470,7 @@ function renderImageGallery(node) {
     const status = document.createElement("span");
     status.className = "ryan-qwen-image-slot-status";
     status.textContent = wired
-      ? `外部输入 ${qwenImageSlotName(slot)}`
+      ? (qwenSourceFilename(source?.sourceNode) || `外部输入 ${qwenImageSlotName(slot)}`)
       : item?.filename || "点击添加图片";
     cell.append(badge, port, status);
 
@@ -1161,7 +1480,6 @@ function renderImageGallery(node) {
       remove.className = "ryan-qwen-image-slot-clear";
       remove.textContent = "×";
       remove.title = "移除图片";
-      remove.disabled = wired;
       remove.addEventListener("pointerdown", (event) => {
         event.preventDefault();
         event.stopPropagation();
@@ -1169,9 +1487,7 @@ function renderImageGallery(node) {
       remove.addEventListener("click", (event) => {
         event.preventDefault();
         event.stopPropagation();
-        if (wired) return;
-        state.gallery = state.gallery.filter((asset) => asset.slot !== slot);
-        state.sync();
+        clearQwenImageSlot(node, slot);
       });
       cell.append(remove);
     }
@@ -1234,6 +1550,19 @@ function createImageGallery(node) {
       slot = firstFreeSlot(node, state.gallery);
     }
   });
+  root.addEventListener("pointerup", (event) => {
+    if (event.button > 0) return;
+    const pending = qwenPendingConnectorLink(app.canvas);
+    if (pending?.direction !== "from_output" || !pending.sourceNode) return;
+    const cell = event.target?.closest?.(".ryan-qwen-image-slot");
+    if (!cell || cell.classList.contains("is-disabled")) return;
+    const slot = Number(cell.dataset.qwenSlot);
+    if (!Number.isInteger(slot)) return;
+    if (!connectQwenImageInput(node, pending.sourceNode, pending.sourceSlot, slot)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    app.canvas?.linkConnector?.reset?.();
+  }, true);
   node.__ryanQwenGallery = root;
   node.__ryanQwenRenderGallery = () => renderImageGallery(node);
   renderImageGallery(node);
@@ -1399,9 +1728,12 @@ function createPromptEditor(node, field, label, minHeight) {
 }
 
 function installQwenStyles() {
-  if (document.getElementById("ryan-qwen-image21-styles")) return;
-  const style = document.createElement("style");
-  style.id = "ryan-qwen-image21-styles";
+  let style = document.getElementById("ryan-qwen-image21-styles");
+  if (!style) {
+    style = document.createElement("style");
+    style.id = "ryan-qwen-image21-styles";
+    document.head.append(style);
+  }
   style.textContent = `
     .ryan-qwen-workbench { display:flex; flex-direction:column; gap:8px; width:100%; max-width:100%; min-width:0; min-height:0; box-sizing:border-box; margin:2px 0 10px; padding:0 10px; overflow:hidden; color:var(--input-text,#ddd); font-family:system-ui,-apple-system,"Segoe UI",sans-serif; }
     .ryan-qwen-image-gallery { display:grid; grid-auto-rows:max-content; gap:4px; width:100%; max-width:100%; min-width:0; box-sizing:border-box; margin:2px 0 8px; padding:0 10px; overflow:hidden; color:var(--input-text,#ddd); font-family:system-ui,-apple-system,"Segoe UI",sans-serif; }
@@ -1417,7 +1749,6 @@ function installQwenStyles() {
     .ryan-qwen-image-slot.is-reordering { opacity:.45; cursor:grabbing; }
     .ryan-qwen-image-slot.is-reorder-target { border-color:rgba(79,150,255,.95); background:rgba(79,150,255,.16); box-shadow:inset 0 0 0 1px rgba(79,150,255,.4); }
     .ryan-qwen-image-slot:active:not(.is-disabled) { transform:scale(.985); }
-    .ryan-qwen-image-slot.has-image { border-style:solid; border-color:rgba(255,255,255,.18); background:rgba(0,0,0,.28); }
     .ryan-qwen-image-slot.is-disabled { opacity:.24; cursor:not-allowed; filter:grayscale(.8); }
     .ryan-qwen-image-slot.is-wired { cursor:default; border-style:solid; border-color:rgba(0,226,187,.55); }
     .ryan-qwen-image-slot.is-uploading { cursor:wait; opacity:.68; }
@@ -1428,8 +1759,7 @@ function installQwenStyles() {
     .ryan-qwen-image-slot-status { position:absolute; left:4px; right:4px; bottom:4px; z-index:2; overflow:hidden; padding:2px 4px; border-radius:4px; background:rgba(0,0,0,.62); color:rgba(255,255,255,.8); font:500 8px/12px system-ui,sans-serif; text-overflow:ellipsis; white-space:nowrap; pointer-events:none; }
     .ryan-qwen-image-slot:not(.has-image) .ryan-qwen-image-slot-status { background:transparent; color:inherit; white-space:normal; text-align:center; }
     .ryan-qwen-image-slot-clear { appearance:none; position:absolute; right:4px; top:4px; z-index:3; display:inline-flex; align-items:center; justify-content:center; width:18px; height:18px; padding:0; border:0; border-radius:5px; background:rgba(0,0,0,.7); color:#fff; cursor:pointer; font:700 14px/1 system-ui; }
-    .ryan-qwen-image-slot-clear:hover:not(:disabled),.ryan-qwen-image-slot-clear:focus-visible { background:rgba(212,70,70,.9); outline:none; }
-    .ryan-qwen-image-slot-clear:disabled { opacity:.4; cursor:not-allowed; }
+    .ryan-qwen-image-slot-clear:hover,.ryan-qwen-image-slot-clear:focus-visible { background:rgba(212,70,70,.9); outline:none; }
     .ryan-qwen-prompt-wrap { position:relative; display:grid; grid-template-rows:max-content minmax(0,1fr); height:var(--ryan-qwen-prompt-height); flex:0 0 var(--ryan-qwen-prompt-height); gap:3px; min-width:0; min-height:calc(var(--ryan-qwen-prompt-min-height) + 19px); }
     .ryan-qwen-prompt-editor { display:block; width:100%; height:100%; min-width:0; min-height:0; max-height:none; box-sizing:border-box; padding:6px; overflow-y:auto; overflow-x:hidden; white-space:pre-wrap; overflow-wrap:anywhere; border:1px solid rgba(255,255,255,.14); border-radius:5px; outline:none; background:rgba(0,0,0,.28); color:var(--input-text,#ddd); caret-color:var(--input-text,#ddd); font-family:Consolas,"Courier New",monospace; font-size:12px; line-height:1.35; }
     .ryan-qwen-prompt-editor.is-connected { opacity:.58; cursor:not-allowed; background:rgba(255,255,255,.055); }
@@ -1441,7 +1771,6 @@ function installQwenStyles() {
     .ryan-qwen-mention-menu button { appearance:none; text-align:left; padding:4px 6px; border:0; border-radius:3px; background:transparent; color:inherit; cursor:pointer; }
     .ryan-qwen-mention-menu button:hover { background:rgba(0,226,187,.16); }
   `;
-  document.head.append(style);
 }
 
 function moveWidgetsBeforeResolution(node, widgets) {
@@ -1461,13 +1790,15 @@ function setupNode(node) {
   node.__ryanQwenImage21Installed = true;
   installQwenStyles();
   patchQwenGraphToPrompt();
+  ensureQwenCanvasBridgeSoon();
   ensureQwenNumericDefaults(node);
+  repairQwenWidgetValuesSoon(node);
   ensureQwenPromptInput(node);
   restoreQwenState(node);
   node._ryanQwenAllInputs ||= [...(node.inputs || [])];
+  restoreQwenImageInputs(node);
+  ensureQwenTypedInputs(node);
   installSlotGeometry(node);
-  installQwenCanvasBridge();
-  setTimeout(() => installQwenCanvasBridge(), 0);
   if (!node.__ryanQwenResizePatched) {
     node.__ryanQwenResizePatched = true;
     const originalResize = node.onResize;
@@ -1541,12 +1872,13 @@ function setupNode(node) {
   };
   persistQwenState(node);
   updateGalleryVisibility(node);
-  virtualizeQwenImageInputs(node);
-  updateGalleryVisibility(node);
 }
 
 app.registerExtension({
   name: "RyanComfyUtils.QwenImage21",
+  setup() {
+    ensureQwenCanvasBridgeSoon();
+  },
   async beforeRegisterNodeDef(nodeType, nodeData) {
     if (nodeData.name !== NODE_NAME) return;
 
@@ -1558,9 +1890,9 @@ app.registerExtension({
 
     const originalConfigure = nodeType.prototype.configure;
     nodeType.prototype.configure = function configureQwenImage21(info) {
-      // Keep a private copy only long enough for LiteGraph's normal workflow
-      // loader to restore legacy image_N links. They are migrated immediately
-      // into the H3-style virtual gallery links after configure returns.
+      // Saved workflows made by older revisions may omit the hidden image_N
+      // inputs. Restore them immediately after LiteGraph configures the node:
+      // LinkConnector cannot snap to a port that is absent from node.inputs.
       if (Array.isArray(this._ryanQwenAllInputs) && this._ryanQwenAllInputs.length) {
         this.inputs = [...this._ryanQwenAllInputs];
       }
@@ -1568,9 +1900,11 @@ app.registerExtension({
       const restored = restoreQwenState(this);
       this._ryanQwenAllInputs ||= [...(this.inputs || [])];
       if (!this.__ryanQwenImage21Installed) setupNode(this);
-      virtualizeQwenImageInputs(this);
+      restoreQwenImageInputs(this);
       ensureQwenNumericDefaults(this);
+      repairQwenWidgetValuesSoon(this);
       ensureQwenPromptInput(this);
+      ensureQwenTypedInputs(this);
       installQwenPersistenceHooks(this);
       // Restore after setup/default normalization as DOM widgets and combo
       // widgets can be inserted/reordered while configure is running.

@@ -13,7 +13,8 @@ test("Qwen Image 2.1 frontend owns a sixteen-slot node extension", () => {
   assert.match(source, /const SLOTS_PER_ROW = 4/);
   assert.match(source, /const DEFAULT_VISIBLE_SLOTS = SLOTS_PER_ROW/);
   assert.match(source, /QWEN_NUMERIC_DEFAULTS/);
-  assert.match(source, /megapixels: 1\.0/);
+  assert.match(source, /megapixels: 2\.0/);
+  assert.match(source, /QWEN_ASPECT_RATIO_DEFAULT = "9:16 \(Portrait Widescreen\)"/);
   assert.match(source, /resolution: 1024/);
   assert.match(source, /Number\.isInteger\(value\) && value >= 1 && value <= 64/);
   assert.match(source, /value === 0 \|\| value % 32 === 0/);
@@ -33,8 +34,19 @@ test("Qwen gallery captures modern LiteGraph connector drops", () => {
   assert.match(source, /linkConnector\?\.events/);
   assert.match(source, /before-drop-links/);
   assert.match(source, /dropped-on-canvas/);
+  assert.match(source, /dropped-on-node/);
   assert.match(source, /target\.addEventListener\("pointerup", handleDrop, true\)/);
   assert.match(source, /elementFromPoint/);
+});
+
+test("Qwen canvas bridge is installed from production setup, not only tests", () => {
+  const setupNode = source.slice(
+    source.indexOf("function setupNode"),
+    source.indexOf("app.registerExtension"),
+  );
+  const extension = source.slice(source.indexOf("app.registerExtension"));
+  assert.match(setupNode, /ensureQwenCanvasBridgeSoon\(\)/);
+  assert.match(extension, /setup\(\)\s*\{[\s\S]*ensureQwenCanvasBridgeSoon\(\)/);
 });
 
 test("Qwen gallery uses ComfyUI upload metadata and persists stable assets", () => {
@@ -52,6 +64,8 @@ test("Qwen gallery supports sorting, deletion, and external input visibility", (
   assert.match(source, /link != null/);
   assert.match(source, /externallyConnected/);
   assert.match(source, /ryan_qwen_image_links/);
+  assert.match(source, /function clearQwenImageSlot/);
+  assert.doesNotMatch(source, /remove\.disabled = wired/);
 });
 
 test("Qwen gallery follows the H3-style in-node image workbench layout", () => {
@@ -63,12 +77,17 @@ test("Qwen gallery follows the H3-style in-node image workbench layout", () => {
   assert.match(source, /ryan-qwen-image-toggle/);
   assert.match(source, /展开其余/);
   assert.match(source, /点击添加图片/);
-  assert.match(source, /function virtualizeQwenImageInputs/);
+  assert.match(source, /function restoreQwenImageInputs/);
+  assert.match(source, /LinkConnector cannot snap to a port that is absent from node\.inputs/);
   assert.match(source, /function writeQwenVirtualLink/);
-  assert.match(source, /node\.inputs\.splice/);
+  assert.match(source, /node\.inputs = restored/);
+  assert.match(source, /node\.getInputPos = function getInputPosQwen/);
   assert.doesNotMatch(source, /sourceNode\.connect/);
   assert.match(source, /patchQwenGraphToPrompt/);
-  assert.match(source, /installQwenCanvasBridge/);
+  assert.match(source, /function qwenImageSlotPromptRef/);
+  assert.match(source, /function qwenSourcePreviewUrl/);
+  assert.match(source, /function watchQwenImageSourceNode/);
+  assert.match(source, /qwenImageSlotPromptRef\(node, slot\)/);
   assert.match(source, /ryan-qwen-workbench/);
   assert.match(source, /ryan_qwen_image21_gallery/);
   assert.match(source, /ryan_qwen_image21_prompt_workbench/);
@@ -78,10 +97,16 @@ test("Qwen gallery follows the H3-style in-node image workbench layout", () => {
   assert.match(source, /updateQwenPromptConnectionState/);
   assert.match(source, /contentEditable = connected \? "false" : "true"/);
   assert.match(source, /promptInput\.link/);
+  assert.match(source, /function ensureQwenTypedInputs/);
+  assert.match(source, /input\.type = "CLIP"/);
+  assert.match(source, /wrapper\.addEventListener\("pointerdown"/);
   assert.doesNotMatch(source, /forceInput/);
   assert.doesNotMatch(source, /pruneQwenImageInputs/);
-  assert.doesNotMatch(source, /Keep the real input in node\.inputs/);
-  assert.doesNotMatch(source, /node\.removeInput/);
+  assert.match(source, /Keep the real LiteGraph inputs hidden from the left edge/);
+  assert.match(source, /function arrangeWithoutQwenImageInputs/);
+  assert.match(source, /function compactQwenBackingWidgets/);
+  assert.match(source, /withQwenImageInputsExcludedFromLayout/);
+  assert.match(source, /input\.pos = QWEN_IMAGE_SLOT_LAYOUT_POS/);
   assert.doesNotMatch(source, /promptNode\.inputs\.prompt_text\s*=/);
 });
 

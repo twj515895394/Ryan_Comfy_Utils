@@ -92,9 +92,9 @@ def test_node_input_contract_keeps_simple_qwen_controls_and_sixteen_slots():
     assert "width" not in inputs["required"]
     assert "height" not in inputs["required"]
     assert "image_slot_count" not in inputs["required"]
-    assert inputs["required"]["aspect_ratio"][1]["default"] == "1:1 (Square)"
+    assert inputs["required"]["aspect_ratio"][1]["default"] == "9:16 (Portrait Widescreen)"
     assert inputs["required"]["megapixels"][0] == list(MEGAPIXEL_OPTIONS)
-    assert inputs["required"]["megapixels"][1]["default"] == DEFAULT_MEGAPIXELS
+    assert inputs["required"]["megapixels"][1]["default"] == DEFAULT_MEGAPIXELS == 2.0
     assert all(isinstance(value, float) for value in inputs["required"]["megapixels"][0])
     assert isinstance(inputs["required"]["megapixels"][1]["default"], float)
     assert inputs["required"]["resolution"][1]["default"] == 1024
@@ -102,6 +102,9 @@ def test_node_input_contract_keeps_simple_qwen_controls_and_sixteen_slots():
     assert inputs["required"]["batch_size"][1]["default"] == 1
     assert inputs["required"]["batch_size"][1]["max"] == 64
     assert inputs["required"]["prompt"][1]["multiline"] is True
+    assert inputs["required"]["clip"] == ("CLIP",)
+    assert inputs["optional"]["vae"] == ("VAE",)
+    assert inputs["optional"]["image_01"] == ("IMAGE",)
     assert inputs["required"]["prompt"][1]["dynamicPrompts"] is True
     assert "prompt" not in inputs["optional"]
     assert "prompt_text" not in inputs["optional"]
